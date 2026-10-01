@@ -1,0 +1,6 @@
+{
+  "name": "Daily",
+  "description": "Minimalistischer Daily-Habit- und Aufgaben-Tracker mit Nothing-inspiriertem monochromem Design, Homescreen-Widget und Erinnerungen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

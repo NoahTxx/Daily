@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_month_title"
+    android:initialKeyguardLayout="@layout/widget_month_matrix_layout"
+    android:initialLayout="@layout/widget_month_matrix_layout"
+    android:minWidth="160dp"
+    android:minHeight="110dp"
+    android:previewImage="@drawable/widget_preview_month"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

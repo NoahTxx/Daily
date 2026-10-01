@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_streak_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
+
+    <!-- Centered Content Row -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Accent dot -->
+        <ImageView
+            android:id="@+id/widget_streak_dot"
+            android:layout_width="7dp"
+            android:layout_height="7dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/widget_dot_red" />
+
+        <!-- Big clean streak number -->
+        <TextView
+            android:id="@+id/widget_streak_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:fontFamily="monospace"
+            android:includeFontPadding="false"
+            android:text="0"
+            android:textColor="#E52E2E"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <!-- Clean side label: stacked so it never breaks, wraps awkwardly, or clips in 2x1 -->
+        <LinearLayout
+            android:id="@+id/widget_streak_label_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:gravity="start|center_vertical"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_streak_label_top"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="none"
+                android:fontFamily="monospace"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.08"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="TAGE"
+                android:textColor="#E6E6EC"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_streak_label_bottom"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="none"
+                android:fontFamily="monospace"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.08"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="STREAK"
+                android:textColor="#888894"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+
+            <!-- Hidden for backward compatibility -->
+            <TextView
+                android:id="@+id/widget_streak_label"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

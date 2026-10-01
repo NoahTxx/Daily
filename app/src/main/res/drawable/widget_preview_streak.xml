@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="70dp"
+    android:viewportWidth="160"
+    android:viewportHeight="70">
+    <!-- Pitch Black Card Background -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M16,6 H144 A16,16 0 0 1 160,22 V48 A16,16 0 0 1 144,64 H16 A16,16 0 0 1 0,48 V22 A16,16 0 0 1 16,6 Z" />
+
+    <!-- Red Accent Dot -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M34,35 A3.5,3.5 0 1,0 41,35 A3.5,3.5 0 1,0 34,35 Z" />
+
+    <!-- "14" Streak Number Representation -->
+    <!-- Digit 1 -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M52,24 H57 V46 H52 Z" />
+    <!-- Digit 4 -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M63,24 H67 V37 H74 V24 H78 V46 H74 V41 H63 Z" />
+
+    <!-- Stacked Label Top: "TAGE" -->
+    <path
+        android:fillColor="#E6E6EC"
+        android:pathData="M88,27 H116 V31 H88 Z" />
+
+    <!-- Stacked Label Bottom: "STREAK" -->
+    <path
+        android:fillColor="#888894"
+        android:pathData="M88,38 H124 V41 H88 Z" />
+</vector>

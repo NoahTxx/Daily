@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_month_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- Header bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/widget_month_header_dot"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_marginEnd="6dp"
+            android:src="@drawable/widget_dot_red" />
+
+        <TextView
+            android:id="@+id/widget_month_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:singleLine="true"
+            android:text="SEPTEMBER"
+            android:textColor="#A0A0AA"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- Accent streak number on the top right -->
+        <TextView
+            android:id="@+id/widget_month_streak_num"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="0"
+            android:textColor="#E52E2E"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Matrix of month dots (Rows 1 to 5) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <!-- Row 1: Days 1-7 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView android:id="@+id/mdot_1" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_2" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_3" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_4" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_5" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_6" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_7" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+        </LinearLayout>
+
+        <!-- Row 2: Days 8-14 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView android:id="@+id/mdot_8" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_9" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_10" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_11" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_12" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_13" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_14" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+        </LinearLayout>
+
+        <!-- Row 3: Days 15-21 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView android:id="@+id/mdot_15" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_16" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_17" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_18" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_19" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_20" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_21" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+        </LinearLayout>
+
+        <!-- Row 4: Days 22-28 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView android:id="@+id/mdot_22" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_23" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_24" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_25" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_26" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_27" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_28" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+        </LinearLayout>
+
+        <!-- Row 5: Days 29-31 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView android:id="@+id/mdot_29" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_30" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+            <ImageView android:id="@+id/mdot_31" android:layout_width="8dp" android:layout_height="8dp" android:layout_margin="3dp" android:src="@drawable/widget_dot_faint" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bottom status text -->
+    <TextView
+        android:id="@+id/widget_month_today_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:fontFamily="monospace"
+        android:gravity="center"
+        android:text="3/4 HEUTE"
+        android:textColor="#888892"
+        android:textSize="9sp" />
+
+</LinearLayout>

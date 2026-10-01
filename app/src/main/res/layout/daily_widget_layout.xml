@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- Header bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Dot indicator -->
+        <ImageView
+            android:id="@+id/widget_header_dot"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:layout_marginEnd="6dp"
+            android:src="@drawable/widget_dot_red" />
+
+        <!-- App title -->
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:text="DAILY"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <!-- Counter badge -->
+        <TextView
+            android:id="@+id/widget_progress_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#16161C"
+            android:fontFamily="monospace"
+            android:paddingStart="7dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="7dp"
+            android:paddingBottom="2dp"
+            android:text="0/0"
+            android:textColor="#E52E2E"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="4dp"
+        android:src="@drawable/widget_divider" />
+
+    <!-- Content area: ListView + Empty view -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Tasks ListView -->
+        <ListView
+            android:id="@+id/widget_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@drawable/widget_divider"
+            android:dividerHeight="1dp" />
+
+        <!-- Empty state layout -->
+        <LinearLayout
+            android:id="@+id/widget_empty_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_empty_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:text="KEINE AUFGABEN"
+                android:textColor="#666672"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </FrameLayout>
+
+</LinearLayout>

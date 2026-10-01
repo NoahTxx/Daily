@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Daily</string>
+    <string name="widget_title">Tägliche Aufgaben</string>
+    <string name="widget_progress_title">Täglicher Fortschritt</string>
+    <string name="widget_streak_title">Daily Streak</string>
+    <string name="widget_month_title">Daily Monats-Matrix</string>
+    <string name="widget_all_done">Alles erledigt!</string>
+    <string name="widget_empty">Keine Aufgaben für heute</string>
+    <string name="notification_channel_name">Tägliche Erinnerungen</string>
+    <string name="notification_channel_desc">Erinnert an noch offene tägliche Aufgaben</string>
+</resources>

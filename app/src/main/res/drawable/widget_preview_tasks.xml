@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="150dp"
+    android:viewportWidth="200"
+    android:viewportHeight="150">
+    <!-- Dark Card Background -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M16,4 H184 A12,12 0 0 1 196,16 V134 A12,12 0 0 1 184,146 H16 A12,12 0 0 1 4,134 V16 A12,12 0 0 1 16,4 Z" />
+    <!-- Red Accent Dot -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M20,24 A4,4 0 1,0 28,24 A4,4 0 1,0 20,24 Z" />
+    <!-- Header line -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,22 H70 V26 H34 Z" />
+    <!-- Status pill -->
+    <path
+        android:fillColor="#222228"
+        android:pathData="M140,18 H180 A5,5 0 0 1 185,23 V27 A5,5 0 0 1 180,32 H140 A5,5 0 0 1 135,27 V23 A5,5 0 0 1 140,18 Z" />
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M148,23 H172 V27 H148 Z" />
+    <!-- Divider -->
+    <path
+        android:fillColor="#1A1A20"
+        android:pathData="M16,40 H184 V41 H16 Z" />
+    <!-- Item 1: Checked -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M24,58 A6,6 0 1,0 36,58 A6,6 0 1,0 24,58 Z" />
+    <path
+        android:fillColor="#666672"
+        android:pathData="M44,56 H120 V60 H44 Z" />
+    <!-- Item 2: Unchecked -->
+    <path
+        android:strokeColor="#555562"
+        android:strokeWidth="1.5"
+        android:pathData="M24,84 A6,6 0 1,0 36,84 A6,6 0 1,0 24,84 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,82 H150 V86 H44 Z" />
+    <!-- Item 3: Unchecked -->
+    <path
+        android:strokeColor="#555562"
+        android:strokeWidth="1.5"
+        android:pathData="M24,110 A6,6 0 1,0 36,110 A6,6 0 1,0 24,110 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,108 H130 V112 H44 Z" />
+</vector>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="120dp"
+    android:viewportWidth="160"
+    android:viewportHeight="120">
+    <!-- Dark Card Background -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M16,6 H144 A12,12 0 0 1 156,18 V102 A12,12 0 0 1 144,114 H16 A12,12 0 0 1 4,102 V18 A12,12 0 0 1 16,6 Z" />
+    <!-- Red Accent Dot & Month Header -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M18,18 A3,3 0 1,0 24,18 A3,3 0 1,0 18,18 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,16 H70 V20 H30 Z" />
+    <!-- Streak Number on Right -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M136,14 H146 V22 H136 Z" />
+    <!-- Matrix of dots (Rows of red and dark dots) -->
+    <!-- Row 1: All Red -->
+    <path android:fillColor="#E52E2E" android:pathData="M24,36 A3,3 0 1,0 30,36 A3,3 0 1,0 24,36 Z M40,36 A3,3 0 1,0 46,36 A3,3 0 1,0 40,36 Z M56,36 A3,3 0 1,0 62,36 A3,3 0 1,0 56,36 Z M72,36 A3,3 0 1,0 78,36 A3,3 0 1,0 72,36 Z M88,36 A3,3 0 1,0 94,36 A3,3 0 1,0 88,36 Z M104,36 A3,3 0 1,0 110,36 A3,3 0 1,0 104,36 Z M120,36 A3,3 0 1,0 126,36 A3,3 0 1,0 120,36 Z" />
+    <!-- Row 2: Red then dark -->
+    <path android:fillColor="#E52E2E" android:pathData="M24,52 A3,3 0 1,0 30,52 A3,3 0 1,0 24,52 Z M40,52 A3,3 0 1,0 46,52 A3,3 0 1,0 40,52 Z M56,52 A3,3 0 1,0 62,52 A3,3 0 1,0 56,52 Z" />
+    <path android:fillColor="#24242C" android:pathData="M72,52 A3,3 0 1,0 78,52 A3,3 0 1,0 72,52 Z M88,52 A3,3 0 1,0 94,52 A3,3 0 1,0 88,52 Z M104,52 A3,3 0 1,0 110,52 A3,3 0 1,0 104,52 Z M120,52 A3,3 0 1,0 126,52 A3,3 0 1,0 120,52 Z" />
+    <!-- Row 3: Dark -->
+    <path android:fillColor="#24242C" android:pathData="M24,68 A3,3 0 1,0 30,68 A3,3 0 1,0 24,68 Z M40,68 A3,3 0 1,0 46,68 A3,3 0 1,0 40,68 Z M56,68 A3,3 0 1,0 62,68 A3,3 0 1,0 56,68 Z M72,68 A3,3 0 1,0 78,68 A3,3 0 1,0 72,68 Z M88,68 A3,3 0 1,0 94,68 A3,3 0 1,0 88,68 Z M104,68 A3,3 0 1,0 110,68 A3,3 0 1,0 104,68 Z M120,68 A3,3 0 1,0 126,68 A3,3 0 1,0 120,68 Z" />
+    <!-- Row 4: Faint -->
+    <path android:fillColor="#15151A" android:pathData="M24,84 A3,3 0 1,0 30,84 A3,3 0 1,0 24,84 Z M40,84 A3,3 0 1,0 46,84 A3,3 0 1,0 40,84 Z M56,84 A3,3 0 1,0 62,84 A3,3 0 1,0 56,84 Z M72,84 A3,3 0 1,0 78,84 A3,3 0 1,0 72,84 Z M88,84 A3,3 0 1,0 94,84 A3,3 0 1,0 88,84 Z M104,84 A3,3 0 1,0 110,84 A3,3 0 1,0 104,84 Z M120,84 A3,3 0 1,0 126,84 A3,3 0 1,0 120,84 Z" />
+</vector>

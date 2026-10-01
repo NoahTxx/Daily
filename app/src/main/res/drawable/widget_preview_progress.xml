@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="140dp"
+    android:viewportWidth="160"
+    android:viewportHeight="140">
+    <!-- Pitch Black Card Background -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M16,6 H144 A16,16 0 0 1 160,22 V118 A16,16 0 0 1 144,134 H16 A16,16 0 0 1 0,118 V22 A16,16 0 0 1 16,6 Z" />
+
+    <!-- Red Accent Dot -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M22,22 A3,3 0 1,0 28,22 A3,3 0 1,0 22,22 Z" />
+
+    <!-- Header bar -->
+    <path
+        android:fillColor="#888894"
+        android:pathData="M34,20 H110 V24 H34 Z" />
+
+    <!-- Circular Progress Track (dim gray) -->
+    <path
+        android:strokeColor="#26262B"
+        android:strokeWidth="6"
+        android:pathData="M80,38 A32,32 0 1,0 80,102 A32,32 0 1,0 80,38 Z" />
+
+    <!-- Circular Progress Arc (Red accent ~75%) -->
+    <path
+        android:strokeColor="#E52E2E"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:pathData="M80,38 A32,32 0 1,1 48,70" />
+
+    <!-- "75%" representation inside ring -->
+    <!-- Digit 7 -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M66,63 H76 V67 L70,78 H66 L72,67 H66 Z" />
+    <!-- Digit 5 -->
+    <path
+        android:fillColor="#E52E2E"
+        android:pathData="M79,63 H89 V67 H83 V70 H86 A4,4 0 0,1 90,74 V74 A4,4 0 0,1 86,78 H79 V74 H86 V74 H83 Z" />
+
+    <!-- Subtext: 3/4 -->
+    <path
+        android:fillColor="#888894"
+        android:pathData="M72,83 H88 V86 H72 Z" />
+
+    <!-- Bottom summary status -->
+    <path
+        android:fillColor="#E6E6EC"
+        android:pathData="M38,118 H122 V122 H38 Z" />
+</vector>

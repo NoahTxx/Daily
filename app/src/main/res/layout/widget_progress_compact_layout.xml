@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_progress_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="6dp">
+
+    <!-- Accent dot -->
+    <ImageView
+        android:id="@+id/widget_progress_compact_dot"
+        android:layout_width="5dp"
+        android:layout_height="5dp"
+        android:layout_marginBottom="3dp"
+        android:src="@drawable/widget_dot_red" />
+
+    <!-- Big clean progress percentage -->
+    <TextView
+        android:id="@+id/widget_progress_compact_percent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:fontFamily="monospace"
+        android:includeFontPadding="false"
+        android:text="0%"
+        android:textColor="#E52E2E"
+        android:textSize="26sp"
+        android:textStyle="bold" />
+
+    <!-- Fraction / subtitle: e.g. "3/4" or "HEUTE" -->
+    <TextView
+        android:id="@+id/widget_progress_compact_fraction"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center"
+        android:fontFamily="monospace"
+        android:includeFontPadding="false"
+        android:letterSpacing="0.06"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:text="0/0"
+        android:textColor="#888894"
+        android:textSize="10sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

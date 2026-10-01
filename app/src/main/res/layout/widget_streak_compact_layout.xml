@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_streak_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="6dp">
+
+    <!-- Big clean streak number only, centered -->
+    <TextView
+        android:id="@+id/widget_streak_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:fontFamily="monospace"
+        android:includeFontPadding="false"
+        android:text="0"
+        android:textColor="#E52E2E"
+        android:textSize="38sp"
+        android:textStyle="bold" />
+
+    <!-- Allowed RemoteViews classes: ImageView and TextView -->
+    <ImageView
+        android:id="@+id/widget_streak_dot"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/widget_streak_label_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_streak_label_top"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/widget_streak_label_bottom"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/widget_streak_label"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+</LinearLayout>
