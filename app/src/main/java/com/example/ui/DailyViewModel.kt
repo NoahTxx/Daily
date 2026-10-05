@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.DailyApplication
@@ -11,20 +12,27 @@ import com.example.data.TaskWithCompletion
 import com.example.reminder.ReminderManager
 import com.example.util.AppLanguage
 import com.example.util.DateUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+@Immutable
 data class StreakStats(
     val currentStreak: Int = 0,
     val longestStreak: Int = 0,
@@ -32,6 +40,7 @@ data class StreakStats(
     val isTodaySecured: Boolean = false
 )
 
+@Immutable
 data class HabitDayStatus(
     val dateKey: String,
     val dayLabel: String,
@@ -41,6 +50,7 @@ data class HabitDayStatus(
     val isDue: Boolean
 )
 
+@Immutable
 data class HabitStats(
     val task: DailyTask,
     val currentStreak: Int,
@@ -56,7 +66,7 @@ data class HabitStats(
     val recent7Days: List<HabitDayStatus>
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: DailyRepository = (application as DailyApplication).repository
@@ -87,8 +97,17 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         allActiveTasks,
         allCompletions
     ) { tasks, completions ->
-        calculateHabitStatsList(tasks, completions)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        tasks to completions
+    }
+        .distinctUntilChanged()
+        .debounce(300L)
+        .map { (tasks, completions) ->
+            withContext(Dispatchers.Default) {
+                calculateHabitStatsList(tasks, completions)
+            }
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val tasksWithCompletions: StateFlow<List<TaskWithCompletion>> = _selectedDateKey
         .flatMapLatest { dateKey ->
@@ -107,7 +126,9 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val streakStats: StateFlow<StreakStats> = fullyCompletedDates.map { dates ->
-        calculateFullStreakStats(dates)
+        withContext(Dispatchers.Default) {
+            calculateFullStreakStats(dates)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StreakStats())
 
     val currentStreak: StateFlow<Int> = streakStats.map { it.currentStreak }
@@ -302,25 +323,40 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                 todayComp != null && todayComp.count > 0
             }
 
+            val lastCompBeforeToday = validCompletions
+                .map { it.dateKey }
+                .filter { it < todayKey }
+                .maxOrNull()
+
+            val currentWeekDays = DateUtils.getDaysInSameWeek(todayKey)
+            val weeklyCompletedCountThisWeek = validCompletions.count { currentWeekDays.contains(it.dateKey) }
+
             val isTodayDue = DateUtils.isTaskDueOnDate(
                 frequencyType = task.frequencyType,
                 daysOfWeek = task.daysOfWeek,
                 targetDaysPerWeek = task.targetDaysPerWeek,
                 dateKey = todayKey,
-                weeklyCompletedCount = 0,
-                isCompletedOnDate = isTodayCompleted
+                weeklyCompletedCount = weeklyCompletedCountThisWeek,
+                isCompletedOnDate = isTodayCompleted,
+                intervalDays = task.intervalDays,
+                intervalAnchorDate = task.intervalAnchorDate,
+                lastCompletionDateKey = lastCompBeforeToday,
+                createdAtMillis = task.createdAt
             )
 
             // Monthly stats
             val monthlyCompletedDays = monthDates.count { completedDateSet.contains(it) }
             val monthlyDueDays = monthDates.count { dKey ->
+                val dWeekDays = DateUtils.getDaysInSameWeek(dKey)
+                val dWeekCount = validCompletions.count { dWeekDays.contains(it.dateKey) }
                 DateUtils.isTaskDueOnDate(
                     frequencyType = task.frequencyType,
                     daysOfWeek = task.daysOfWeek,
                     targetDaysPerWeek = task.targetDaysPerWeek,
                     dateKey = dKey,
-                    weeklyCompletedCount = 0,
-                    isCompletedOnDate = completedDateSet.contains(dKey)
+                    weeklyCompletedCount = dWeekCount,
+                    isCompletedOnDate = completedDateSet.contains(dKey),
+                    createdAtMillis = task.createdAt
                 )
             }.coerceAtLeast(1)
 
@@ -330,13 +366,16 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
             val recent7 = recent7DateKeys.map { dKey ->
                 val isDone = completedDateSet.contains(dKey)
                 val isTod = dKey == todayKey
+                val dWeekDays = DateUtils.getDaysInSameWeek(dKey)
+                val dWeekCount = validCompletions.count { dWeekDays.contains(it.dateKey) }
                 val due = DateUtils.isTaskDueOnDate(
                     frequencyType = task.frequencyType,
                     daysOfWeek = task.daysOfWeek,
                     targetDaysPerWeek = task.targetDaysPerWeek,
                     dateKey = dKey,
-                    weeklyCompletedCount = 0,
-                    isCompletedOnDate = isDone
+                    weeklyCompletedCount = dWeekCount,
+                    isCompletedOnDate = isDone,
+                    createdAtMillis = task.createdAt
                 )
                 val dayLabel = DateUtils.getDayOfWeek(dKey, AppLanguage.DE)
                 val dayNum = DateUtils.getDayNumber(dKey)
@@ -427,10 +466,117 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 return Pair(curStreak, maxOf(longest, curStreak))
             }
+            "WEEKLY" -> {
+                return calculateWeeklyHabitStreak(task, completedDates)
+            }
+            "INTERVAL" -> {
+                return calculateIntervalHabitStreak(task, completedDates, todayKey)
+            }
             else -> {
                 return calculateDailyHabitStreak(completedDates, todayKey)
             }
         }
+    }
+
+    private fun calculateWeeklyHabitStreak(
+        task: DailyTask,
+        completedDates: Set<String>
+    ): Pair<Int, Int> {
+        if (completedDates.isEmpty()) return Pair(0, 0)
+        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val calForDate = Calendar.getInstance()
+        val completionsByWeek = mutableMapOf<String, Int>()
+
+        for (dStr in completedDates) {
+            try {
+                calForDate.time = format.parse(dStr) ?: continue
+                val year = calForDate.get(Calendar.YEAR)
+                val week = calForDate.get(Calendar.WEEK_OF_YEAR)
+                val key = "$year-W$week"
+                completionsByWeek[key] = (completionsByWeek[key] ?: 0) + 1
+            } catch (_: Exception) {}
+        }
+
+        val todayKey = DateUtils.getTodayKey()
+        val cal = Calendar.getInstance()
+        val curYear = cal.get(Calendar.YEAR)
+        val curWeek = cal.get(Calendar.WEEK_OF_YEAR)
+        val curWeekKey = "$curYear-W$curWeek"
+        val curWeekComps = completionsByWeek[curWeekKey] ?: 0
+        val curWeekTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, todayKey)
+
+        var currentStreak = 0
+        val checkCal = Calendar.getInstance()
+
+        if (curWeekComps >= curWeekTarget) {
+            currentStreak = 1
+            checkCal.add(Calendar.WEEK_OF_YEAR, -1)
+        } else {
+            // Ongoing week doesn't penalize previous streak
+            checkCal.add(Calendar.WEEK_OF_YEAR, -1)
+        }
+
+        while (true) {
+            val y = checkCal.get(Calendar.YEAR)
+            val w = checkCal.get(Calendar.WEEK_OF_YEAR)
+            val weekKey = "$y-W$w"
+            val sampleDate = format.format(checkCal.time)
+            // Stop if checkCal is before task creation
+            if (!DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, sampleDate)) {
+                break
+            }
+            val count = completionsByWeek[weekKey] ?: 0
+            val weekTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, sampleDate)
+            if (count >= weekTarget) {
+                currentStreak++
+                checkCal.add(Calendar.WEEK_OF_YEAR, -1)
+            } else {
+                break
+            }
+        }
+
+        return Pair(currentStreak, currentStreak)
+    }
+
+    private fun calculateIntervalHabitStreak(
+        task: DailyTask,
+        completedDates: Set<String>,
+        todayKey: String
+    ): Pair<Int, Int> {
+        if (completedDates.isEmpty()) return Pair(0, 0)
+        val sortedDates = completedDates.sorted()
+        val lastDate = sortedDates.last()
+        val daysSinceLast = DateUtils.daysBetween(lastDate, todayKey)
+        val safeInterval = task.intervalDays.coerceAtLeast(1)
+
+        var currentStreak = 0
+        if (daysSinceLast <= safeInterval) {
+            currentStreak = 1
+            for (i in sortedDates.size - 1 downTo 1) {
+                val curr = sortedDates[i]
+                val prev = sortedDates[i - 1]
+                val diff = DateUtils.daysBetween(prev, curr)
+                if (diff <= safeInterval + 1) {
+                    currentStreak++
+                } else {
+                    break
+                }
+            }
+        }
+
+        var longest = currentStreak
+        var temp = 1
+        for (i in 1 until sortedDates.size) {
+            val diff = DateUtils.daysBetween(sortedDates[i - 1], sortedDates[i])
+            if (diff <= safeInterval + 1) {
+                temp++
+                if (temp > longest) longest = temp
+            } else {
+                temp = 1
+            }
+        }
+
+        return Pair(currentStreak, maxOf(longest, currentStreak))
     }
 
     private fun calculateDailyHabitStreak(

@@ -129,7 +129,7 @@ fun SettingsScreen(
         item {
             NothingHeader(
                 title = t("settings_header"),
-                subtitle = t("settings_subtitle"),
+                subtitle = null,
                 badgeText = null
             )
         }

@@ -16,17 +16,19 @@
         android:layout_marginBottom="3dp"
         android:src="@drawable/widget_dot_red" />
 
-    <!-- Big clean progress percentage -->
+    <!-- Big clean progress percentage or checkmark at 100% -->
     <TextView
         android:id="@+id/widget_progress_compact_percent"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:fontFamily="monospace"
+        android:fontFamily="sans-serif"
         android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
         android:text="0%"
         android:textColor="#E52E2E"
-        android:textSize="26sp"
+        android:textSize="24sp"
         android:textStyle="bold" />
 
     <!-- Fraction / subtitle: e.g. "3/4" or "HEUTE" -->

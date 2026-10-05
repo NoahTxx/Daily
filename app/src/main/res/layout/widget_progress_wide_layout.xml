@@ -29,11 +29,14 @@
             android:id="@+id/widget_progress_wide_percent"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="monospace"
+            android:gravity="center"
+            android:fontFamily="sans-serif"
             android:includeFontPadding="false"
+            android:maxLines="1"
+            android:singleLine="true"
             android:text="0%"
             android:textColor="#E52E2E"
-            android:textSize="26sp"
+            android:textSize="24sp"
             android:textStyle="bold" />
     </LinearLayout>
 

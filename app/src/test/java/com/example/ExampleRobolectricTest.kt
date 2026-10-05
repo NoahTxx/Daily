@@ -419,4 +419,169 @@ class ExampleRobolectricTest {
         assertTrue(com.example.ui.DailyViewModel.isCategoryEquivalent("Supplements", "Supplements"))
         assertTrue(com.example.ui.DailyViewModel.isCategoryEquivalent("Routine", "Routines"))
     }
+
+    @Test
+    fun testWeeklyHabitDoesNotBreakDailyStreakOnNonRequiredDays() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.DailyRepository(db.dailyTaskDao(), context)
+
+        // Monday of week
+        val monday = "2026-09-28" // This was a Monday
+
+        // 1. Create a daily task
+        val dailyTaskId = repo.insertTask(
+            DailyTask(title = "Daily Vitamin", category = "Supplements", createdAt = 0L)
+        )
+        // 2. Create a weekly task (1x per week)
+        val weeklyTaskId = repo.insertTask(
+            DailyTask(title = "Clean Room", category = "Routine", frequencyType = "WEEKLY", targetDaysPerWeek = 1, createdAt = 0L)
+        )
+
+        // Complete ONLY the daily task on Monday (clean room is NOT done yet)
+        db.dailyTaskDao().insertCompletion(TaskCompletion(taskId = dailyTaskId, dateKey = monday, count = 1))
+
+        // Check if Monday is counted as a fully completed day:
+        // On Monday, the weekly task (1x/week) has 7 days left in the week and only 1 needed.
+        // Therefore, it is NOT mandatory on Monday, and Monday's streak MUST be saved!
+        val fullyDone = repo.getFullyCompletedDatesSync()
+        assertTrue("Monday streak should be preserved even without weekly task completion!", fullyDone.contains(monday))
+    }
+
+    @Test
+    fun testWeeklyHabitDueOnlyOnMandatoryDays() = runBlocking {
+        // Mon..Thu with 0 completions: NOT due yet!
+        assertEquals(false, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-09-28", 0, false))
+        assertEquals(false, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-09-29", 0, false))
+        assertEquals(false, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-09-30", 0, false))
+        assertEquals(false, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-10-01", 0, false))
+
+        // Fri..Sun with 0 completions: strictly mandatory and DUE!
+        assertEquals(true, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-10-02", 0, false))
+        assertEquals(true, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-10-03", 0, false))
+        assertEquals(true, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-10-04", 0, false))
+
+        // But if user completes it on Monday (1/3 done):
+        // Then Tue..Fri are NOT due (remaining needed = 2, only Sat & Sun are mandatory!)
+        assertEquals(false, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-09-29", 1, false))
+        assertEquals(false, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-09-30", 1, false))
+        assertEquals(false, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-10-01", 1, false))
+        assertEquals(false, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-10-02", 1, false))
+        // Sat & Sun are the 2 remaining mandatory days:
+        assertEquals(true, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-10-03", 1, false))
+        assertEquals(true, DateUtils.isTaskDueOnDate("WEEKLY", "", 3, "2026-10-04", 1, false))
+    }
+
+    @Test
+    fun testIntervalHabitPersistenceAndDueCalculation() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.DailyRepository(db.dailyTaskDao(), context)
+
+        val startDay = "2026-10-01"
+        // Create an interval task: every 5 days
+        val intervalTaskId = repo.insertTask(
+            DailyTask(
+                title = "Water Plants",
+                category = "Routine",
+                frequencyType = "INTERVAL",
+                intervalDays = 5,
+                intervalAnchorDate = startDay,
+                createdAt = 0L
+            )
+        )
+
+        val task = db.dailyTaskDao().getTaskById(intervalTaskId)
+        assertNotNull(task)
+        assertEquals("INTERVAL", task!!.frequencyType)
+        assertEquals(5, task.intervalDays)
+        assertEquals(startDay, task.intervalAnchorDate)
+
+        // Day 1 (2026-10-01): due from anchor
+        assertTrue(DateUtils.isIntervalTaskDue(5, startDay, null, "2026-10-01"))
+
+        // Complete on 2026-10-01
+        db.dailyTaskDao().insertCompletion(TaskCompletion(taskId = intervalTaskId, dateKey = "2026-10-01", count = 1))
+
+        // Intermediate days: Day 2 (10-02), Day 3 (10-03), Day 4 (10-04), Day 5 (10-05) -> NOT DUE
+        assertEquals(false, DateUtils.isIntervalTaskDue(5, startDay, "2026-10-01", "2026-10-02"))
+        assertEquals(false, DateUtils.isIntervalTaskDue(5, startDay, "2026-10-01", "2026-10-03"))
+        assertEquals(false, DateUtils.isIntervalTaskDue(5, startDay, "2026-10-01", "2026-10-04"))
+        assertEquals(false, DateUtils.isIntervalTaskDue(5, startDay, "2026-10-01", "2026-10-05"))
+
+        // 5 days later: Day 6 (2026-10-06) -> DUE!
+        assertTrue(DateUtils.isIntervalTaskDue(5, startDay, "2026-10-01", "2026-10-06"))
+
+        // Days until due calculation
+        assertEquals(4, DateUtils.getDaysUntilIntervalDue(5, startDay, "2026-10-01", "2026-10-02"))
+        assertEquals(0, DateUtils.getDaysUntilIntervalDue(5, startDay, "2026-10-01", "2026-10-06"))
+    }
+
+    @Test
+    fun testIntervalHabitDoesNotBreakDailyStreakOnIntermediateDays() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.DailyRepository(db.dailyTaskDao(), context)
+
+        val day1 = "2026-10-01"
+        val day2 = "2026-10-02"
+
+        // 1. Daily task
+        val dailyTaskId = repo.insertTask(DailyTask(title = "Morning Coffee", category = "Supplements", createdAt = 0L))
+        // 2. Interval task: every 5 days, anchor = day1
+        val intervalTaskId = repo.insertTask(
+            DailyTask(title = "Change Sheets", category = "Routine", frequencyType = "INTERVAL", intervalDays = 5, intervalAnchorDate = day1, createdAt = 0L)
+        )
+
+        // Day 1: User does both daily task and interval task
+        db.dailyTaskDao().insertCompletion(TaskCompletion(taskId = dailyTaskId, dateKey = day1, count = 1))
+        db.dailyTaskDao().insertCompletion(TaskCompletion(taskId = intervalTaskId, dateKey = day1, count = 1))
+
+        // Day 2: User does ONLY daily task (interval task is not due until Day 6)
+        db.dailyTaskDao().insertCompletion(TaskCompletion(taskId = dailyTaskId, dateKey = day2, count = 1))
+
+        val fullyDone = repo.getFullyCompletedDatesSync()
+        // Day 2 MUST be saved in streak!
+        assertTrue("Day 2 streak should be preserved because interval task is not due today!", fullyDone.contains(day2))
+    }
+
+    @Test
+    fun testSundayCreationWeeklyTargetIsOne() {
+        // Sunday 2026-10-04 (ISO day 7)
+        val sundayMillis = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse("2026-10-04")!!.time
+
+        // If created on Sunday with target = 3, effective target in that week is 1!
+        val effectiveTargetSunday = DateUtils.getEffectiveWeeklyTarget(3, sundayMillis, "2026-10-04")
+        assertEquals(1, effectiveTargetSunday)
+
+        // On Sunday with 0 completions, it is mandatory (needed = 1, remaining = 1)
+        assertTrue(DateUtils.isTaskMandatoryOnDate("WEEKLY", "", 3, 1, "", null, "2026-10-04", 0, false, sundayMillis))
+
+        // In the next week (e.g. 2026-10-05, Monday), the full target = 3 applies!
+        val effectiveTargetNextWeek = DateUtils.getEffectiveWeeklyTarget(3, sundayMillis, "2026-10-05")
+        assertEquals(3, effectiveTargetNextWeek)
+    }
+
+    @Test
+    fun testWeeklyTaskDoesNotBreakDailyStreakOnNonMandatoryDays() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.DailyRepository(db.dailyTaskDao(), context)
+
+        // Monday 2026-09-28
+        val mon = "2026-09-28"
+        val monMillis = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(mon)!!.time
+        val tue = "2026-09-29"
+
+        // 1. Daily task
+        val dailyTaskId = repo.insertTask(DailyTask(title = "Daily Meditation", category = "Routine", createdAt = monMillis))
+        // 2. Weekly task created on Monday: 3x per week
+        repo.insertTask(DailyTask(title = "Gym Workout", category = "Sport", frequencyType = "WEEKLY", targetDaysPerWeek = 3, createdAt = monMillis))
+
+        // Monday: User completes ONLY the daily task
+        db.dailyTaskDao().insertCompletion(TaskCompletion(taskId = dailyTaskId, dateKey = mon, count = 1))
+        // Tuesday: User completes ONLY the daily task
+        db.dailyTaskDao().insertCompletion(TaskCompletion(taskId = dailyTaskId, dateKey = tue, count = 1))
+
+        val fullyDone = repo.getFullyCompletedDatesSync()
+        // Both Monday and Tuesday must be fully completed because Gym (3x/week) was NOT mandatory on Mon or Tue!
+        assertTrue("Monday streak should be secured!", fullyDone.contains(mon))
+        assertTrue("Tuesday streak should be secured!", fullyDone.contains(tue))
+    }
 }

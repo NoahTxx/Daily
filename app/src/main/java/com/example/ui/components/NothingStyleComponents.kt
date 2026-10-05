@@ -3,6 +3,7 @@ package com.example.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,8 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -48,10 +52,18 @@ import com.example.util.LocalAppLanguage
 import com.example.util.LocalBodyFontFamily
 import com.example.util.LocalHeadingFontFamily
 
+// Pre-allocated shapes to avoid allocation in composition and scrolling passes
+val ShapePill = RoundedCornerShape(100.dp)
+val ShapeCardLarge = RoundedCornerShape(20.dp)
+val ShapeCardMedium = RoundedCornerShape(16.dp)
+val ShapeCardSmall = RoundedCornerShape(12.dp)
+val ShapeBox8 = RoundedCornerShape(8.dp)
+val ShapeBox6 = RoundedCornerShape(6.dp)
+
 @Composable
 fun NothingCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(20.dp),
+    shape: Shape = ShapeCardLarge,
     backgroundColor: Color = MaterialTheme.colorScheme.surface,
     borderColor: Color = MaterialTheme.colorScheme.outline,
     onClick: (() -> Unit)? = null,
@@ -59,7 +71,7 @@ fun NothingCard(
 ) {
     val clickableModifier = if (onClick != null) {
         Modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
+            interactionSource = remember(onClick) { MutableInteractionSource() },
             indication = null,
             onClick = onClick
         )
@@ -67,9 +79,8 @@ fun NothingCard(
 
     Box(
         modifier = modifier
-            .clip(shape)
+            .background(backgroundColor, shape)
             .border(1.dp, borderColor, shape)
-            .background(backgroundColor)
             .then(clickableModifier)
     ) {
         content()
@@ -86,48 +97,53 @@ fun NothingCheckbox(
     testTag: String = "habit_checkbox"
 ) {
     val accentColor = LocalAccentColor.current
-
-    val borderColor by animateColorAsState(
-        targetValue = if (checked) accentColor else MaterialTheme.colorScheme.outline,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 150),
-        label = "checkboxBorder"
-    )
-    val bgColor by animateColorAsState(
-        targetValue = if (checked) accentColor.copy(alpha = 0.15f) else Color.Transparent,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 150),
-        label = "checkboxBg"
-    )
-    val scale by animateFloatAsState(
-        targetValue = if (checked) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
-        label = "checkboxDotScale"
-    )
+    val outlineColor = MaterialTheme.colorScheme.outline
 
     val clickModifier = if (enabled) {
         Modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
+            interactionSource = remember(onCheckedChange) { MutableInteractionSource() },
             indication = null,
             onClick = onCheckedChange
         )
     } else Modifier
 
-    Box(
+    Canvas(
         modifier = modifier
             .size(size)
             .testTag(testTag)
-            .clip(CircleShape)
-            .border(1.5.dp, borderColor, CircleShape)
-            .background(bgColor)
-            .then(clickModifier),
-        contentAlignment = Alignment.Center
+            .then(clickModifier)
     ) {
+        val radius = this.size.minDimension / 2f
+        val strokeWidth = 1.5.dp.toPx()
+        val c = this.center
+
         if (checked) {
-            Box(
-                modifier = Modifier
-                    .size(size * 0.45f)
-                    .scale(scale)
-                    .clip(CircleShape)
-                    .background(accentColor)
+            // Fill background with light accent
+            drawCircle(
+                color = accentColor.copy(alpha = 0.15f),
+                radius = radius,
+                center = c
+            )
+            // Accent circle border
+            drawCircle(
+                color = accentColor,
+                radius = radius - strokeWidth / 2f,
+                center = c,
+                style = Stroke(width = strokeWidth)
+            )
+            // Inner solid dot
+            drawCircle(
+                color = accentColor,
+                radius = radius * 0.46f,
+                center = c
+            )
+        } else {
+            // Unchecked outline
+            drawCircle(
+                color = outlineColor,
+                radius = radius - strokeWidth / 2f,
+                center = c,
+                style = Stroke(width = strokeWidth)
             )
         }
     }
@@ -141,16 +157,14 @@ fun NothingPill(
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
     val accentColor = LocalAccentColor.current
-    val bodyFont = LocalBodyFontFamily.current
     val bg = if (isAccent) accentColor.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
     val border = if (isAccent) accentColor.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline
     val textColor = if (isAccent) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(100.dp))
-            .border(1.dp, border, RoundedCornerShape(100.dp))
-            .background(bg)
+            .background(bg, ShapePill)
+            .border(1.dp, border, ShapePill)
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -160,10 +174,7 @@ fun NothingPill(
         }
         Text(
             text = text,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontFamily = bodyFont,
-                lineHeight = 14.sp
-            ),
+            style = MaterialTheme.typography.labelSmall,
             color = textColor,
             maxLines = 1,
             softWrap = false
@@ -264,25 +275,30 @@ fun DotMatrixProgress(
     completed: Int,
     modifier: Modifier = Modifier
 ) {
-    if (total == 0) return
+    if (total <= 0) return
     val accentColor = LocalAccentColor.current
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val count = total.coerceAtMost(16)
 
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Canvas(
+        modifier = modifier.height(10.dp)
     ) {
-        repeat(total.coerceAtMost(16)) { index ->
-            val isDone = index < completed
-            val dotColor = if (isDone) accentColor else MaterialTheme.colorScheme.outline
-            val dotSize = if (isDone) 7.dp else 5.dp
+        val spacing = 5.dp.toPx()
+        val doneRadius = 3.5.dp.toPx()
+        val notDoneRadius = 2.5.dp.toPx()
+        val centerY = size.height / 2f
 
-            Box(
-                modifier = Modifier
-                    .size(dotSize)
-                    .clip(CircleShape)
-                    .background(dotColor)
+        var currentX = doneRadius
+        for (i in 0 until count) {
+            val isDone = i < completed
+            val r = if (isDone) doneRadius else notDoneRadius
+            val color = if (isDone) accentColor else outlineColor
+            drawCircle(
+                color = color,
+                radius = r,
+                center = Offset(currentX, centerY)
             )
+            currentX += (r * 2f) + spacing
         }
     }
 }
@@ -379,6 +395,88 @@ fun NotificationPermissionCard(
                     modifier = Modifier.size(16.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun TaskSectionHeader(
+    title: String,
+    count: Int,
+    subtitle: String? = null,
+    isAccent: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = LocalAccentColor.current
+    val headingFont = LocalHeadingFontFamily.current
+    val bodyFont = LocalBodyFontFamily.current
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
+            // Indicator dot
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(if (isAccent) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title.uppercase(),
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontFamily = headingFont,
+                    fontSize = 13.sp,
+                    letterSpacing = 1.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                color = if (isAccent) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "• $subtitle",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = bodyFont,
+                        fontSize = 11.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Count badge
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isAccent) accentColor.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    width = 1.dp,
+                    color = if (isAccent) accentColor.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = bodyFont,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                ),
+                color = if (isAccent) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

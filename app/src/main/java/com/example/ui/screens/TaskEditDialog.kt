@@ -49,7 +49,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.DailyTask
@@ -84,6 +86,8 @@ fun TaskEditDialog(
     var isCounter by remember { mutableStateOf(task?.isCounter ?: false) }
     var frequencyType by remember { mutableStateOf(task?.frequencyType ?: "DAILY") }
     var targetDaysPerWeek by remember { mutableIntStateOf(task?.targetDaysPerWeek ?: 1) }
+    var intervalDays by remember { mutableIntStateOf(task?.intervalDays ?: 5) }
+    var intervalAnchorDate by remember { mutableStateOf(task?.intervalAnchorDate?.ifBlank { DateUtils.getTodayKey() } ?: DateUtils.getTodayKey()) }
     var selectedDaysOfWeek by remember {
         val initialDays = (task?.daysOfWeek ?: "1,2,3,4,5,6,7").split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
         mutableStateOf(if (initialDays.isEmpty()) setOf(1, 2, 3, 4, 5, 6, 7) else initialDays)
@@ -169,6 +173,7 @@ fun TaskEditDialog(
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Default, fontSize = 16.sp),
                 label = { Text(t("task_name_label"), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = bodyFont)) },
                 placeholder = { Text(t("task_name_placeholder"), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = bodyFont)) },
                 modifier = Modifier
@@ -239,39 +244,150 @@ fun TaskEditDialog(
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 listOf(
                     "DAILY" to t("freq_daily"),
                     "WEEKLY" to t("freq_weekly"),
-                    "WEEKDAYS" to t("freq_weekdays")
+                    "WEEKDAYS" to t("freq_weekdays"),
+                    "INTERVAL" to t("freq_interval")
                 ).forEach { (type, label) ->
                     val isSelected = frequencyType == type
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .border(
                                 1.dp,
                                 if (isSelected) accentColor else MaterialTheme.colorScheme.outline,
-                                RoundedCornerShape(12.dp)
+                                RoundedCornerShape(10.dp)
                             )
                             .background(
                                 if (isSelected) accentColor.copy(alpha = 0.15f)
                                 else MaterialTheme.colorScheme.surfaceVariant
                             )
                             .clickable { frequencyType = type }
-                            .padding(vertical = 12.dp),
+                            .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = label,
-                            style = MaterialTheme.typography.labelMedium.copy(
+                            style = MaterialTheme.typography.labelSmall.copy(
                                 fontFamily = bodyFont,
+                                fontSize = 10.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             ),
-                            color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                    }
+                }
+            }
+
+            // Sub-settings for Interval (Alle X Tage)
+            if (frequencyType == "INTERVAL") {
+                Spacer(modifier = Modifier.height(12.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(14.dp)
+                ) {
+                    // Preset Chips
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(2, 3, 4, 5, 7, 10, 14, 30).forEach { days ->
+                            val isSel = intervalDays == days
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(
+                                        1.dp,
+                                        if (isSel) accentColor else MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .background(
+                                        if (isSel) accentColor.copy(alpha = 0.2f)
+                                        else MaterialTheme.colorScheme.surface
+                                    )
+                                    .clickable { intervalDays = days }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isEn) "Every $days d" else "Alle $days Tage",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = bodyFont,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                    ),
+                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Custom Stepper
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = String.format(t("every_x_days"), intervalDays),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = headingFont,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp
+                            ),
+                            color = accentColor
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Decrement button
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                    .clickable { if (intervalDays > 1) intervalDays-- },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "-",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = headingFont),
+                                    color = if (intervalDays > 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            }
+
+                            // Increment button
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                    .clickable { if (intervalDays < 365) intervalDays++ },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "+",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = headingFont),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -287,12 +403,6 @@ fun TaskEditDialog(
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(14.dp)
                 ) {
-                    Text(
-                        text = t("weekly_target_title"),
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -341,12 +451,6 @@ fun TaskEditDialog(
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(14.dp)
                 ) {
-                    Text(
-                        text = t("select_days_hint"),
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
                     val dayLabels = if (isEn) {
                         listOf(1 to "M", 2 to "T", 3 to "W", 4 to "T", 5 to "F", 6 to "S", 7 to "S")
                     } else {
@@ -722,6 +826,8 @@ fun TaskEditDialog(
                                 frequencyType = frequencyType,
                                 targetDaysPerWeek = if (frequencyType == "WEEKLY") targetDaysPerWeek else 1,
                                 daysOfWeek = daysCsv,
+                                intervalDays = if (frequencyType == "INTERVAL") intervalDays.coerceAtLeast(1) else 1,
+                                intervalAnchorDate = if (frequencyType == "INTERVAL") intervalAnchorDate.ifBlank { DateUtils.getTodayKey() } else "",
                                 isCounter = isCounter,
                                 targetCount = if (isCounter) targetCnt else 1,
                                 unit = if (isCounter) unitText.trim() else "",

@@ -46,6 +46,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.DailyTask
@@ -92,20 +94,20 @@ fun RoutinesScreen(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 150.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item {
+            item(key = "header") {
                 NothingHeader(
                     title = t("routines_header"),
-                    subtitle = t("routines_subtitle"),
+                    subtitle = null,
                     badgeText = badgeString,
                     badgeFontSize = 20.sp
                 )
             }
 
             if (!resetInfoDismissed) {
-                item {
+                item(key = "reset_info") {
                     NothingCard(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = com.example.ui.components.ShapeCardMedium,
                         backgroundColor = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Row(
@@ -144,11 +146,12 @@ fun RoutinesScreen(
             }
 
             if (tasks.isEmpty()) {
-                item {
+                item(key = "empty_routines") {
                     NothingCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 20.dp)
+                            .padding(top = 20.dp),
+                        shape = com.example.ui.components.ShapeCardLarge
                     ) {
                         Column(
                             modifier = Modifier
@@ -171,13 +174,15 @@ fun RoutinesScreen(
                     }
                 }
             } else {
-                items(tasks, key = { it.id }) { task ->
+                items(
+                    items = tasks,
+                    key = { it.id },
+                    contentType = { "routine_card" }
+                ) { task ->
                     RoutineItemCard(
                         task = task,
                         onEdit = { onEditTaskClick(task) },
-                        onToggleActive = {
-                            viewModel.toggleTaskActive(task)
-                        },
+                        onToggleActive = { viewModel.toggleTaskActive(task) },
                         onDelete = { viewModel.deleteTask(task) }
                     )
                 }
@@ -205,7 +210,6 @@ fun RoutinesScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RoutineItemCard(
     task: DailyTask,
@@ -221,13 +225,12 @@ fun RoutineItemCard(
     fun t(key: String): String = AppStrings.get(key, language)
 
     val isActive = !task.isArchived
-    val cardAlpha = if (isActive) 1f else 0.55f
+    val cardBg = if (isActive) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
 
     NothingCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (cardAlpha < 1f) Modifier.graphicsLayer { alpha = cardAlpha } else Modifier),
-        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.fillMaxWidth(),
+        shape = com.example.ui.components.ShapeCardMedium,
+        backgroundColor = cardBg,
         onClick = onEdit
     ) {
         Row(
@@ -237,7 +240,11 @@ fun RoutineItemCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Title row with status dot
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(7.dp)
@@ -247,20 +254,26 @@ fun RoutineItemCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = task.title,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontFamily = bodyFont,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontFamily = FontFamily.Default,
                             fontSize = 16.sp
                         ),
                         color = if (isActive) MaterialTheme.colorScheme.onSurface
-                               else MaterialTheme.colorScheme.onSurfaceVariant
+                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Secondary pills with FlowRow: Category, Paused, Frequency, Counter, Timer
+                // FlowRow ensures all pills wrap cleanly across any screen size and are never cut off
+                @OptIn(ExperimentalLayoutApi::class)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     NothingPill(text = task.category.uppercase())
@@ -285,6 +298,12 @@ fun RoutineItemCard(
                                 isAccent = isActive
                             )
                         }
+                        "INTERVAL" -> {
+                            NothingPill(
+                                text = String.format(t("every_x_days"), task.intervalDays),
+                                isAccent = isActive
+                            )
+                        }
                         else -> {
                             // "DAILY"
                         }
@@ -297,6 +316,7 @@ fun RoutineItemCard(
                         )
                     }
 
+                    // Reminder time pill at the bottom with other pills
                     if (task.reminderHour != null && task.reminderMinute != null) {
                         NothingPill(
                             text = DateUtils.formatTime(task.reminderHour, task.reminderMinute),

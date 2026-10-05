@@ -188,16 +188,16 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         val dotBitmap = WidgetBitmapUtils.createColoredCircleBitmap(16, accentColor)
         views.setImageViewBitmap(R.id.widget_progress_compact_dot, dotBitmap)
 
-        views.setTextViewText(R.id.widget_progress_compact_percent, "$percent%")
+        val percentText = "$percent%"
+        views.setTextViewText(R.id.widget_progress_compact_percent, percentText)
+        views.setTextViewTextSize(
+            R.id.widget_progress_compact_percent,
+            android.util.TypedValue.COMPLEX_UNIT_SP,
+            if (percent >= 100) 20f else 22f
+        )
         views.setTextColor(R.id.widget_progress_compact_percent, accentColor)
 
-        val fractionText = if (total == 0) {
-            "-"
-        } else if (done >= total) {
-            if (isEn) "ALL DONE" else "ALLES"
-        } else {
-            "$done/$total"
-        }
+        val fractionText = if (total == 0) "-" else "$done/$total"
         views.setTextViewText(R.id.widget_progress_compact_fraction, fractionText)
 
         attachAppClick(context, views, R.id.widget_progress_root, appWidgetId + 3100)
@@ -217,7 +217,13 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         val dotBitmap = WidgetBitmapUtils.createColoredCircleBitmap(20, accentColor)
         views.setImageViewBitmap(R.id.widget_progress_wide_dot, dotBitmap)
 
-        views.setTextViewText(R.id.widget_progress_wide_percent, "$percent%")
+        val percentText = "$percent%"
+        views.setTextViewText(R.id.widget_progress_wide_percent, percentText)
+        views.setTextViewTextSize(
+            R.id.widget_progress_wide_percent,
+            android.util.TypedValue.COMPLEX_UNIT_SP,
+            if (percent >= 100) 22f else 24f
+        )
         views.setTextColor(R.id.widget_progress_wide_percent, accentColor)
 
         val completedText = if (total == 0) {
@@ -276,7 +282,13 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         val titleText = AppStrings.get("widget_progress_title", if (isEn) AppLanguage.EN else AppLanguage.DE)
         views.setTextViewText(R.id.widget_progress_large_title, titleText)
 
-        views.setTextViewText(R.id.widget_progress_large_percent, "$percent%")
+        val percentText = "$percent%"
+        views.setTextViewText(R.id.widget_progress_large_percent, percentText)
+        views.setTextViewTextSize(
+            R.id.widget_progress_large_percent,
+            android.util.TypedValue.COMPLEX_UNIT_SP,
+            if (percent >= 100) 20f else 22f
+        )
         views.setTextColor(R.id.widget_progress_large_percent, accentColor)
 
         views.setTextViewText(R.id.widget_progress_large_fraction, "$done / $total")

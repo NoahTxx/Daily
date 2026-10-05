@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [DailyTask::class, TaskCompletion::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class DailyDatabase : RoomDatabase() {
@@ -28,6 +28,13 @@ abstract class DailyDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE daily_tasks ADD COLUMN intervalDays INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE daily_tasks ADD COLUMN intervalAnchorDate TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getInstance(context: Context): DailyDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -35,7 +42,7 @@ abstract class DailyDatabase : RoomDatabase() {
                     DailyDatabase::class.java,
                     "daily_habits.db"
                 )
-                    .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
