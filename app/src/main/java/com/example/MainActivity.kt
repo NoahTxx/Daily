@@ -84,10 +84,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val appSettings = remember { AppSettings.getInstance(context) }
-            val selectedAccent by appSettings.selectedAccent.collectAsState()
-            val selectedHeadingFont by appSettings.selectedHeadingFont.collectAsState()
-            val selectedBodyFont by appSettings.selectedBodyFont.collectAsState()
-            val selectedLanguage by appSettings.selectedLanguage.collectAsState()
+            val selectedAccent by appSettings.selectedAccent.collectAsStateWithLifecycle()
+            val selectedHeadingFont by appSettings.selectedHeadingFont.collectAsStateWithLifecycle()
+            val selectedBodyFont by appSettings.selectedBodyFont.collectAsStateWithLifecycle()
+            val selectedLanguage by appSettings.selectedLanguage.collectAsStateWithLifecycle()
 
             val headingFontFamily = when (selectedHeadingFont) {
                 HeadingFont.NDOT -> NDotFontFamily
@@ -256,63 +256,85 @@ fun NothingBottomNavigation(
             verticalAlignment = Alignment.CenterVertically
         ) {
             DailyNavTab.entries.forEach { tab ->
-                val isSelected = tab == currentTab
-                val contentColor = if (isSelected) Color(0xFFF5F5F7) else Color(0xFF6E6E78)
-                val bgColor = if (isSelected) Color(0xFF1C1C22) else Color.Transparent
-
-                val tabTitle = when (tab) {
-                    DailyNavTab.TODAY -> if (currentLang == com.example.util.AppLanguage.EN) "TODAY" else "HEUTE"
-                    DailyNavTab.ROUTINES -> if (currentLang == com.example.util.AppLanguage.EN) "ROUTINES" else "ROUTINEN"
-                    DailyNavTab.STATS -> "STATS"
-                    DailyNavTab.SETTINGS -> if (currentLang == com.example.util.AppLanguage.EN) "SETTINGS" else "EINSTELLUNGEN"
-                }
-
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(bgColor)
-                        .clickable(
-                            interactionSource = remember(tab) { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onTabSelected(tab) }
-                        )
-                        .defaultMinSize(minHeight = 44.dp)
-                        .padding(
-                            horizontal = if (tab == DailyNavTab.SETTINGS) 12.dp else 14.dp,
-                            vertical = 8.dp
-                        )
-                        .testTag("nav_tab_${tab.name.lowercase()}"),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isSelected) {
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .clip(CircleShape)
-                                .background(accentColor)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-
-                    if (tab == DailyNavTab.SETTINGS) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = tabTitle,
-                            tint = if (isSelected) accentColor else contentColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    } else {
-                        Text(
-                            text = tabTitle,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = bodyFont,
-                                letterSpacing = 1.sp
-                            ),
-                            color = contentColor
-                        )
-                    }
-                }
+                NothingBottomNavItem(
+                    tab = tab,
+                    isSelected = tab == currentTab,
+                    currentLang = currentLang,
+                    accentColor = accentColor,
+                    bodyFont = bodyFont,
+                    onTabSelected = onTabSelected
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun NothingBottomNavItem(
+    tab: DailyNavTab,
+    isSelected: Boolean,
+    currentLang: com.example.util.AppLanguage,
+    accentColor: Color,
+    bodyFont: FontFamily,
+    onTabSelected: (DailyNavTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val contentColor = if (isSelected) Color(0xFFF5F5F7) else Color(0xFF6E6E78)
+    val bgColor = if (isSelected) Color(0xFF1C1C22) else Color.Transparent
+
+    val tabTitle = remember(tab, currentLang) {
+        when (tab) {
+            DailyNavTab.TODAY -> if (currentLang == com.example.util.AppLanguage.EN) "TODAY" else "HEUTE"
+            DailyNavTab.ROUTINES -> if (currentLang == com.example.util.AppLanguage.EN) "ROUTINES" else "ROUTINEN"
+            DailyNavTab.STATS -> "STATS"
+            DailyNavTab.SETTINGS -> if (currentLang == com.example.util.AppLanguage.EN) "SETTINGS" else "EINSTELLUNGEN"
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(bgColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = { onTabSelected(tab) }
+            )
+            .defaultMinSize(minHeight = 44.dp)
+            .padding(
+                horizontal = if (tab == DailyNavTab.SETTINGS) 12.dp else 14.dp,
+                vertical = 8.dp
+            )
+            .testTag("nav_tab_${tab.name.lowercase()}"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .clip(CircleShape)
+                    .background(accentColor)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+
+        if (tab == DailyNavTab.SETTINGS) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = tabTitle,
+                tint = if (isSelected) accentColor else contentColor,
+                modifier = Modifier.size(16.dp)
+            )
+        } else {
+            Text(
+                text = tabTitle,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = bodyFont,
+                    letterSpacing = 1.sp
+                ),
+                color = contentColor
+            )
         }
     }
 }

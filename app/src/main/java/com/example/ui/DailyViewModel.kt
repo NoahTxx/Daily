@@ -85,12 +85,15 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val allActiveTasks: StateFlow<List<DailyTask>> = repository.getAllActiveTasks()
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allTasks: StateFlow<List<DailyTask>> = repository.getAllTasks()
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allCompletions: StateFlow<List<TaskCompletion>> = repository.getAllCompletions()
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val habitStatsList: StateFlow<List<HabitStats>> = combine(
@@ -100,13 +103,14 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         tasks to completions
     }
         .distinctUntilChanged()
-        .debounce(300L)
+        .debounce(100L)
         .map { (tasks, completions) ->
             withContext(Dispatchers.Default) {
                 calculateHabitStatsList(tasks, completions)
             }
         }
         .flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val tasksWithCompletions: StateFlow<List<TaskWithCompletion>> = _selectedDateKey
@@ -117,21 +121,29 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
             if (category == null) list
             else list.filter { isCategoryEquivalent(it.task.category, category) }
         }
+        .flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allCompletionDates: StateFlow<List<String>> = repository.getAllCompletionDates()
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val fullyCompletedDates: StateFlow<List<String>> = repository.getFullyCompletedDates()
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val streakStats: StateFlow<StreakStats> = fullyCompletedDates.map { dates ->
         withContext(Dispatchers.Default) {
             calculateFullStreakStats(dates)
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StreakStats())
+    }
+        .flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StreakStats())
 
     val currentStreak: StateFlow<Int> = streakStats.map { it.currentStreak }
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val routinesResetInfoDismissed: StateFlow<Boolean> =
@@ -285,6 +297,13 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private data class HabitStatsCacheKey(
+        val task: DailyTask,
+        val completions: List<TaskCompletion>,
+        val todayKey: String
+    )
+    private val habitStatsCache = java.util.concurrent.ConcurrentHashMap<Long, Pair<HabitStatsCacheKey, HabitStats>>()
+
     internal fun calculateHabitStatsList(
         tasks: List<DailyTask>,
         completions: List<TaskCompletion>
@@ -292,6 +311,9 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val todayKey = DateUtils.getTodayKey()
         val completionsByTask = completions.groupBy { it.taskId }
+
+        val activeIds = tasks.map { it.id }.toSet()
+        habitStatsCache.keys.retainAll(activeIds)
 
         val cal = Calendar.getInstance()
         val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
@@ -301,6 +323,12 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
         return tasks.map { task ->
             val taskComps = completionsByTask[task.id] ?: emptyList()
+
+            // Skip recalculation if task definition and completions have not changed
+            val cached = habitStatsCache[task.id]
+            if (cached != null && cached.first.task == task && cached.first.completions == taskComps && cached.first.todayKey == todayKey) {
+                return@map cached.second
+            }
 
             // Completion valid if count >= targetCount for counter, or count > 0 for standard
             val validCompletions = taskComps.filter { comp ->
@@ -392,7 +420,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
             // Calculate current streak and longest streak for this habit
             val (currentStreak, longestStreak) = calculateHabitStreak(task, completedDateSet, todayKey)
 
-            HabitStats(
+            val computedStats = HabitStats(
                 task = task,
                 currentStreak = currentStreak,
                 longestStreak = longestStreak,
@@ -406,6 +434,8 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                 completedDateSet = completedDateSet,
                 recent7Days = recent7
             )
+            habitStatsCache[task.id] = Pair(HabitStatsCacheKey(task, taskComps, todayKey), computedStats)
+            computedStats
         }
     }
 

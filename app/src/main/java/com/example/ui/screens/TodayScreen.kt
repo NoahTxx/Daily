@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,12 +49,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -165,9 +166,9 @@ fun TodayScreen(
         }
     }
 
-    val appSettings = remember { AppSettings.getInstance(context) }
-    val vibrationEnabled by appSettings.vibrationFeedbackEnabled.collectAsState()
-    val animationEnabled by appSettings.completionAnimationEnabled.collectAsState()
+    val appSettings = remember(context) { AppSettings.getInstance(context) }
+    val vibrationEnabled by appSettings.vibrationFeedbackEnabled.collectAsStateWithLifecycle()
+    val animationEnabled by appSettings.completionAnimationEnabled.collectAsStateWithLifecycle()
 
     var showCelebration by remember { mutableStateOf(false) }
     var previousCompletedCount by remember(selectedDateKey) { mutableIntStateOf(completedCount) }
@@ -214,8 +215,11 @@ fun TodayScreen(
         DateUtils.formatDisplayDate(selectedDateKey, language)
     }
 
+    val listState = rememberLazyListState()
+
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
@@ -223,7 +227,7 @@ fun TodayScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header with noticeably enlarged "0/5" badge on the top right
-            item(key = "header") {
+            item(key = "header", contentType = "header") {
                 NothingHeader(
                     title = "DAILY",
                     subtitle = displayDate,
@@ -234,7 +238,7 @@ fun TodayScreen(
 
             // Notification Permission Card (if permission not granted)
             if (showPermissionCard) {
-                item(key = "permission_card") {
+                item(key = "permission_card", contentType = "permission") {
                     NotificationPermissionCard(
                         onGrantClick = {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -247,7 +251,7 @@ fun TodayScreen(
             }
 
             // Horizontal Date Strip (Past 6 days + Today)
-            item(key = "date_strip") {
+            item(key = "date_strip", contentType = "date_strip") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -268,7 +272,7 @@ fun TodayScreen(
             }
 
             // Summary Card (Progress + Streak)
-            item(key = "summary_card") {
+            item(key = "summary_card", contentType = "summary") {
                 NothingCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = com.example.ui.components.ShapeCardLarge,
@@ -338,7 +342,7 @@ fun TodayScreen(
             }
 
             // Category Filter Pills (LazyRow for zero-conflict silky smooth scrolling)
-            item(key = "category_filter") {
+            item(key = "category_filter", contentType = "category_filter") {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -385,7 +389,7 @@ fun TodayScreen(
 
             // Past Day Read-Only Indicator
             if (!isViewingToday) {
-                item(key = "past_day_indicator") {
+                item(key = "past_day_indicator", contentType = "indicator") {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -403,7 +407,7 @@ fun TodayScreen(
 
             // Tasks List
             if (tasks.isEmpty()) {
-                item(key = "empty_tasks_state") {
+                item(key = "empty_tasks_state", contentType = "empty") {
                     NothingCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -448,7 +452,7 @@ fun TodayScreen(
             } else {
                 // 1. OPEN DUE TASKS (Must be done today!)
                 if (openDueTasks.isNotEmpty()) {
-                    item(key = "header_open_tasks") {
+                    item(key = "header_open_tasks", contentType = "section_header") {
                         TaskSectionHeader(
                             title = t("section_due_open"),
                             count = openDueTasks.size,
@@ -471,7 +475,7 @@ fun TodayScreen(
                     }
                 } else if (totalCount > 0 && completedCount >= totalCount) {
                     // All due habits completed for today!
-                    item(key = "all_done_card") {
+                    item(key = "all_done_card", contentType = "all_done") {
                         NothingCard(
                             modifier = Modifier.fillMaxWidth(),
                             shape = com.example.ui.components.ShapeCardMedium,
@@ -524,7 +528,7 @@ fun TodayScreen(
 
                 // 2. COMPLETED TASKS
                 if (completedTasks.isNotEmpty()) {
-                    item(key = "header_completed_tasks") {
+                    item(key = "header_completed_tasks", contentType = "section_header") {
                         TaskSectionHeader(
                             title = t("section_completed"),
                             count = completedTasks.size,
@@ -549,7 +553,7 @@ fun TodayScreen(
 
                 // 3. NOT DUE TODAY / REST DAY TASKS
                 if (notDueTasks.isNotEmpty()) {
-                    item(key = "header_not_due_tasks") {
+                    item(key = "header_not_due_tasks", contentType = "section_header") {
                         TaskSectionHeader(
                             title = t("section_not_due"),
                             count = notDueTasks.size,

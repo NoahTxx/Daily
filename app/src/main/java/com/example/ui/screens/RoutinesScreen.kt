@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,6 +39,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,23 +80,28 @@ fun RoutinesScreen(
 
     val resetInfoDismissed by viewModel.routinesResetInfoDismissed.collectAsStateWithLifecycle()
 
-    val activeCount = tasks.count { !it.isArchived }
-    val totalCount = tasks.size
-    val badgeString = if (totalCount == 0) {
-        "0 ${t("active_badge")}"
-    } else {
-        "$activeCount / $totalCount ${t("active_badge")}"
+    val activeCount = remember(tasks) { tasks.count { !it.isArchived } }
+    val totalCount = remember(tasks) { tasks.size }
+    val badgeString = remember(activeCount, totalCount, language) {
+        if (totalCount == 0) {
+            "0 ${t("active_badge")}"
+        } else {
+            "$activeCount / $totalCount ${t("active_badge")}"
+        }
     }
+
+    val listState = rememberLazyListState()
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 150.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item(key = "header") {
+            item(key = "header", contentType = "header") {
                 NothingHeader(
                     title = t("routines_header"),
                     subtitle = null,
@@ -104,7 +111,7 @@ fun RoutinesScreen(
             }
 
             if (!resetInfoDismissed) {
-                item(key = "reset_info") {
+                item(key = "reset_info", contentType = "reset_info") {
                     NothingCard(
                         modifier = Modifier.fillMaxWidth(),
                         shape = com.example.ui.components.ShapeCardMedium,
@@ -146,7 +153,7 @@ fun RoutinesScreen(
             }
 
             if (tasks.isEmpty()) {
-                item(key = "empty_routines") {
+                item(key = "empty_routines", contentType = "empty") {
                     NothingCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -225,12 +232,32 @@ fun RoutineItemCard(
     fun t(key: String): String = AppStrings.get(key, language)
 
     val isActive = !task.isArchived
-    val cardBg = if (isActive) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+    val cardBg = remember(isActive) {
+        if (isActive) Color.Unspecified else Color.Unspecified
+    }
+
+    val categoryText = remember(task.category) { task.category.uppercase() }
+    val freqText = remember(task.frequencyType, task.targetDaysPerWeek, task.daysOfWeek, task.intervalDays, language) {
+        when (task.frequencyType) {
+            "WEEKLY" -> String.format(t("times_per_week"), task.targetDaysPerWeek)
+            "WEEKDAYS" -> DateUtils.formatDaysOfWeekShort(task.daysOfWeek, language)
+            "INTERVAL" -> String.format(t("every_x_days"), task.intervalDays)
+            else -> null
+        }
+    }
+    val counterText = remember(task.isCounter, task.targetCount, task.unit) {
+        if (task.isCounter) "${t("goal_label")}: ${task.targetCount} ${task.unit}".trim() else null
+    }
+    val reminderText = remember(task.reminderHour, task.reminderMinute) {
+        if (task.reminderHour != null && task.reminderMinute != null) {
+            DateUtils.formatTime(task.reminderHour, task.reminderMinute)
+        } else null
+    }
 
     NothingCard(
         modifier = modifier.fillMaxWidth(),
         shape = com.example.ui.components.ShapeCardMedium,
-        backgroundColor = cardBg,
+        backgroundColor = if (isActive) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
         onClick = onEdit
     ) {
         Row(
@@ -268,70 +295,16 @@ fun RoutineItemCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Secondary pills with FlowRow: Category, Paused, Frequency, Counter, Timer
-                // FlowRow ensures all pills wrap cleanly across any screen size and are never cut off
-                @OptIn(ExperimentalLayoutApi::class)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    NothingPill(text = task.category.uppercase())
-
-                    if (!isActive) {
-                        NothingPill(
-                            text = t("paused_badge"),
-                            isAccent = false
-                        )
-                    }
-
-                    when (task.frequencyType) {
-                        "WEEKLY" -> {
-                            NothingPill(
-                                text = String.format(t("times_per_week"), task.targetDaysPerWeek),
-                                isAccent = isActive
-                            )
-                        }
-                        "WEEKDAYS" -> {
-                            NothingPill(
-                                text = DateUtils.formatDaysOfWeekShort(task.daysOfWeek, language),
-                                isAccent = isActive
-                            )
-                        }
-                        "INTERVAL" -> {
-                            NothingPill(
-                                text = String.format(t("every_x_days"), task.intervalDays),
-                                isAccent = isActive
-                            )
-                        }
-                        else -> {
-                            // "DAILY"
-                        }
-                    }
-
-                    if (task.isCounter) {
-                        NothingPill(
-                            text = "${t("goal_label")}: ${task.targetCount} ${task.unit}".trim(),
-                            isAccent = isActive
-                        )
-                    }
-
-                    // Reminder time pill at the bottom with other pills
-                    if (task.reminderHour != null && task.reminderMinute != null) {
-                        NothingPill(
-                            text = DateUtils.formatTime(task.reminderHour, task.reminderMinute),
-                            isAccent = isActive && task.reminderEnabled,
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (task.reminderEnabled && isActive) Icons.Default.Alarm else Icons.Default.AlarmOff,
-                                    contentDescription = null,
-                                    tint = if (task.reminderEnabled && isActive) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                        )
-                    }
-                }
+                RoutinePillsSection(
+                    categoryText = categoryText,
+                    isActive = isActive,
+                    freqText = freqText,
+                    counterText = counterText,
+                    reminderText = reminderText,
+                    reminderEnabled = task.reminderEnabled,
+                    accentColor = accentColor,
+                    pausedText = t("paused_badge")
+                )
             }
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -360,6 +333,64 @@ fun RoutineItemCard(
                     modifier = Modifier.size(18.dp)
                 )
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun RoutinePillsSection(
+    categoryText: String,
+    isActive: Boolean,
+    freqText: String?,
+    counterText: String?,
+    reminderText: String?,
+    reminderEnabled: Boolean,
+    accentColor: Color,
+    pausedText: String,
+    modifier: Modifier = Modifier
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        NothingPill(text = categoryText)
+
+        if (!isActive) {
+            NothingPill(
+                text = pausedText,
+                isAccent = false
+            )
+        }
+
+        if (freqText != null) {
+            NothingPill(
+                text = freqText,
+                isAccent = isActive
+            )
+        }
+
+        if (counterText != null) {
+            NothingPill(
+                text = counterText,
+                isAccent = isActive
+            )
+        }
+
+        if (reminderText != null) {
+            NothingPill(
+                text = reminderText,
+                isAccent = isActive && reminderEnabled,
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (reminderEnabled && isActive) Icons.Default.Alarm else Icons.Default.AlarmOff,
+                        contentDescription = null,
+                        tint = if (reminderEnabled && isActive) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            )
         }
     }
 }
