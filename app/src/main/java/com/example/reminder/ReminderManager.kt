@@ -37,6 +37,46 @@ object ReminderManager {
     private const val TEST_SNOOZE_REQUEST_CODE = 99951
     private const val TASK_SNOOZE_REQUEST_CODE_OFFSET = 500000
 
+    private fun canPostNotifications(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun scheduleAlarm(alarmManager: AlarmManager, triggerAtMillis: Long, pendingIntent: PendingIntent) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent
+                    )
+                }
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+            }
+        } catch (_: Exception) {
+            alarmManager.set(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        }
+    }
+
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val appSettings = AppSettings.getInstance(context)
@@ -61,11 +101,9 @@ object ReminderManager {
         }
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
         val intent = Intent(context, ReminderBroadcastReceiver::class.java).apply {
             putExtra(EXTRA_TASK_ID, task.id)
         }
-
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             task.id.toInt(),
@@ -78,42 +116,12 @@ object ReminderManager {
             set(Calendar.MINUTE, task.reminderMinute)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-
-            // If the time has already passed today, schedule for tomorrow
             if (timeInMillis <= System.currentTimeMillis()) {
                 add(Calendar.DAY_OF_YEAR, 1)
             }
         }
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    pendingIntent
-                )
-            }
-        } catch (e: Exception) {
-            alarmManager.set(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
-        }
+        scheduleAlarm(alarmManager, calendar.timeInMillis, pendingIntent)
     }
 
     fun cancelReminder(context: Context, taskId: Long) {
@@ -149,15 +157,7 @@ object ReminderManager {
     }
 
     fun showReminderNotification(context: Context, task: DailyTask, isSnoozed: Boolean = false) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    context,
-                    android.Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return
-            }
-        }
+        if (!canPostNotifications(context)) return
 
         val appSettings = AppSettings.getInstance(context)
         val language = appSettings.selectedLanguage.value
@@ -173,7 +173,6 @@ object ReminderManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Action 1: Complete Task
         val completeIntent = Intent(context, QuickActionReceiver::class.java).apply {
             action = QuickActionReceiver.ACTION_COMPLETE_TASK
             putExtra(EXTRA_TASK_ID, task.id)
@@ -186,7 +185,6 @@ object ReminderManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Action 2: Snooze 10 Minutes
         val snooze10PendingIntent = createSnoozeTaskPendingIntent(
             context = context,
             taskId = task.id,
@@ -194,8 +192,6 @@ object ReminderManager {
             notificationId = task.id.toInt(),
             requestCode = task.id.toInt() + 30000
         )
-
-        // Action 3: Snooze 30 Minutes
         val snooze30PendingIntent = createSnoozeTaskPendingIntent(
             context = context,
             taskId = task.id,
@@ -203,8 +199,6 @@ object ReminderManager {
             notificationId = task.id.toInt(),
             requestCode = task.id.toInt() + 40000
         )
-
-        // Action 4: Snooze 60 Minutes
         val snooze60PendingIntent = createSnoozeTaskPendingIntent(
             context = context,
             taskId = task.id,
@@ -222,13 +216,7 @@ object ReminderManager {
             baseBody
         }
 
-        val actionTextDone = AppStrings.get("notif_mark_done", language)
-        val actionText10 = AppStrings.get("notif_snooze_10m", language)
-        val actionText30 = AppStrings.get("notif_snooze_30m", language)
-        val actionText60 = AppStrings.get("notif_snooze_60m", language)
-
         val largeAppIcon = getAppLargeIcon(context)
-
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -239,36 +227,17 @@ object ReminderManager {
             .setContentIntent(openAppPendingIntent)
             .setAutoCancel(true)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .addAction(
-                R.drawable.widget_checkbox_checked,
-                actionTextDone,
-                completePendingIntent
-            )
-            .addAction(
-                R.drawable.widget_dot_gray,
-                actionText10,
-                snooze10PendingIntent
-            )
-            .addAction(
-                R.drawable.widget_dot_gray,
-                actionText30,
-                snooze30PendingIntent
-            )
-            .addAction(
-                R.drawable.widget_dot_gray,
-                actionText60,
-                snooze60PendingIntent
-            )
+            .addAction(R.drawable.widget_checkbox_checked, AppStrings.get("notif_mark_done", language), completePendingIntent)
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_10m", language), snooze10PendingIntent)
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
 
         if (largeAppIcon != null) {
             notificationBuilder.setLargeIcon(largeAppIcon)
         }
 
-        val notification = notificationBuilder.build()
-
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(task.id.toInt(), notification)
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(task.id.toInt(), notificationBuilder.build())
     }
 
     fun showGeneralReminderNotification(
@@ -277,15 +246,7 @@ object ReminderManager {
         totalCount: Int,
         isSnoozed: Boolean = false
     ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    context,
-                    android.Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return
-            }
-        }
+        if (!canPostNotifications(context)) return
 
         val appSettings = AppSettings.getInstance(context)
         val language = appSettings.selectedLanguage.value
@@ -301,7 +262,6 @@ object ReminderManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Snooze actions (10 / 30 / 60 min)
         val snooze10Intent = Intent(context, QuickActionReceiver::class.java).apply {
             action = QuickActionReceiver.ACTION_SNOOZE_GENERAL
             putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, GENERAL_NOTIFICATION_ID)
@@ -348,7 +308,6 @@ object ReminderManager {
         }
 
         val largeAppIcon = getAppLargeIcon(context)
-
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -358,31 +317,16 @@ object ReminderManager {
             .setContentIntent(openAppPendingIntent)
             .setAutoCancel(true)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-            .addAction(
-                R.drawable.widget_dot_gray,
-                AppStrings.get("notif_snooze_10m", language),
-                snooze10PendingIntent
-            )
-            .addAction(
-                R.drawable.widget_dot_gray,
-                AppStrings.get("notif_snooze_30m", language),
-                snooze30PendingIntent
-            )
-            .addAction(
-                R.drawable.widget_dot_gray,
-                AppStrings.get("notif_snooze_60m", language),
-                snooze60PendingIntent
-            )
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_10m", language), snooze10PendingIntent)
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
 
         if (largeAppIcon != null) {
             notificationBuilder.setLargeIcon(largeAppIcon)
         }
 
-        val notification = notificationBuilder.build()
-
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(GENERAL_NOTIFICATION_ID, notification)
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(GENERAL_NOTIFICATION_ID, notificationBuilder.build())
     }
 
     private fun createSnoozeTaskPendingIntent(
@@ -419,37 +363,7 @@ object ReminderManager {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val triggerAtMillis = System.currentTimeMillis() + (minutes * 60 * 1000L)
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerAtMillis,
-                    pendingIntent
-                )
-            }
-        } catch (e: Exception) {
-            alarmManager.set(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent
-            )
-        }
+        scheduleAlarm(alarmManager, System.currentTimeMillis() + (minutes * 60 * 1000L), pendingIntent)
     }
 
     fun cancelTaskSnooze(context: Context, taskId: Long) {
@@ -492,35 +406,7 @@ object ReminderManager {
             }
         }
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    pendingIntent
-                )
-            }
-        } catch (e: Exception) {
-            alarmManager.set(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
-        }
+        scheduleAlarm(alarmManager, calendar.timeInMillis, pendingIntent)
     }
 
     fun cancelGeneralDailyReminder(context: Context) {
@@ -550,37 +436,7 @@ object ReminderManager {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val triggerAtMillis = System.currentTimeMillis() + (minutes * 60 * 1000L)
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerAtMillis,
-                    pendingIntent
-                )
-            }
-        } catch (e: Exception) {
-            alarmManager.set(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent
-            )
-        }
+        scheduleAlarm(alarmManager, System.currentTimeMillis() + (minutes * 60 * 1000L), pendingIntent)
     }
 
     fun cancelGeneralSnooze(context: Context) {
@@ -611,49 +467,11 @@ object ReminderManager {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val triggerAtMillis = System.currentTimeMillis() + (minutes * 60 * 1000L)
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerAtMillis,
-                    pendingIntent
-                )
-            }
-        } catch (e: Exception) {
-            alarmManager.set(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent
-            )
-        }
+        scheduleAlarm(alarmManager, System.currentTimeMillis() + (minutes * 60 * 1000L), pendingIntent)
     }
 
     fun triggerTestNotification(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    context,
-                    android.Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return
-            }
-        }
+        if (!canPostNotifications(context)) return
         val appSettings = AppSettings.getInstance(context)
         val language = appSettings.selectedLanguage.value
         val accentColor = appSettings.selectedAccent.value.color.toArgb()
@@ -668,7 +486,6 @@ object ReminderManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Snooze actions for test notification
         val snooze10Intent = Intent(context, QuickActionReceiver::class.java).apply {
             action = QuickActionReceiver.ACTION_SNOOZE_TEST
             putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, TEST_NOTIFICATION_ID)
@@ -707,7 +524,6 @@ object ReminderManager {
 
         val title = AppStrings.get("notif_test_title", language)
         val body = AppStrings.get("notif_test_body", language)
-
         val largeAppIcon = getAppLargeIcon(context)
 
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -718,31 +534,16 @@ object ReminderManager {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(openAppPendingIntent)
             .setAutoCancel(true)
-            .addAction(
-                R.drawable.widget_dot_gray,
-                AppStrings.get("notif_snooze_10m", language),
-                snooze10PendingIntent
-            )
-            .addAction(
-                R.drawable.widget_dot_gray,
-                AppStrings.get("notif_snooze_30m", language),
-                snooze30PendingIntent
-            )
-            .addAction(
-                R.drawable.widget_dot_gray,
-                AppStrings.get("notif_snooze_60m", language),
-                snooze60PendingIntent
-            )
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_10m", language), snooze10PendingIntent)
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
+            .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
 
         if (largeAppIcon != null) {
             notificationBuilder.setLargeIcon(largeAppIcon)
         }
 
-        val notification = notificationBuilder.build()
-
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(TEST_NOTIFICATION_ID, notification)
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(TEST_NOTIFICATION_ID, notificationBuilder.build())
     }
 
     private fun getAppLargeIcon(context: Context): android.graphics.Bitmap? {
