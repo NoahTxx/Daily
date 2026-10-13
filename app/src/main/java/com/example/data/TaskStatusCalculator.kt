@@ -14,8 +14,10 @@ object TaskStatusCalculator {
         val countToday = completionToday?.count ?: 0
         val isCompleted = isCountSatisfied(task, countToday)
 
-        val weeklyList = weekCompletions.filter { it.taskId == task.id }
-        val weeklyCompletedCount = weeklyList.count { isCountSatisfied(task, it.count) }
+        val weeklyCompletedCount = weekCompletions
+            .filter { it.taskId == task.id }
+            .count { isCountSatisfied(task, it.count) }
+
         val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(
             task.targetDaysPerWeek,
             task.createdAt,
@@ -87,10 +89,6 @@ object TaskStatusCalculator {
     }
 
     private fun isCountSatisfied(task: DailyTask, count: Int): Boolean {
-        return if (task.isCounter) {
-            count >= task.targetCount
-        } else {
-            count > 0
-        }
+        return if (task.isCounter) count >= task.targetCount else count > 0
     }
 }
