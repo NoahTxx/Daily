@@ -54,155 +54,95 @@ object DateUtils {
         return dateKey == getTodayKey()
     }
 
-    fun formatDisplayDate(dateKey: String, language: AppLanguage = AppLanguage.DE): String {
-        val isTodayDate = isToday(dateKey)
-        val cacheKey = "$dateKey-$language-$isTodayDate"
-        displayDateCache[cacheKey]?.let { return it }
-
-        val date = parseDateKey(dateKey) ?: return dateKey
-        val isEn = language == AppLanguage.EN
-        val result = if (isTodayDate) {
-            if (isEn) {
-                "TODAY, " + SimpleDateFormat("MMMM d", Locale.US).format(date).uppercase()
-            } else {
-                "HEUTE, " + SimpleDateFormat("d. MMMM", Locale.GERMAN).format(date).uppercase()
-            }
-        } else {
-            if (isEn) {
-                SimpleDateFormat("EEEE, MMMM d", Locale.US).format(date).uppercase()
-            } else {
-                SimpleDateFormat("EEEE, d. MMMM", Locale.GERMAN).format(date).uppercase()
-            }
-        }
-        displayDateCache[cacheKey] = result
-        return result
-    }
-
-    fun formatShortDisplay(dateKey: String, language: AppLanguage = AppLanguage.DE): String {
-        val cacheKey = "$dateKey-$language"
-        shortDisplayCache[cacheKey]?.let { return it }
-
-        val date = parseDateKey(dateKey) ?: return dateKey
-        val locale = if (language == AppLanguage.EN) Locale.US else Locale.GERMAN
-        val pattern = if (language == AppLanguage.EN) "EEE, MMM d" else "EE, d. MMM"
-        val result = SimpleDateFormat(pattern, locale).format(date).uppercase()
-        shortDisplayCache[cacheKey] = result
-        return result
-    }
-
-    fun getDayOfWeek(dateKey: String, language: AppLanguage = AppLanguage.DE): String {
-        val iso = getIsoDayOfWeek(dateKey)
-        if (iso in 1..7) {
-            return if (language == AppLanguage.EN) daysEn[iso - 1] else daysDe[iso - 1]
-        }
-        return ""
-    }
-
-    fun getDayNumber(dateKey: String): String {
-        dayNumberCache[dateKey]?.let { return it }
-        val result = if (dateKey.length >= 10) {
-            val d1 = dateKey[8]
-            val d2 = dateKey[9]
-            if (d1 == '0') d2.toString() else "$d1$d2"
-        } else {
-            dateKey
-        }
-        dayNumberCache[dateKey] = result
-        return result
-    }
-
-    fun getPastDays(daysCount: Int): List<String> {
-        if (daysCount <= 0) return emptyList()
-        val list = ArrayList<String>(daysCount)
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_YEAR, -(daysCount - 1))
-        repeat(daysCount) {
-            list.add(keyFormat.format(cal.time))
-            cal.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        return list
-    }
-
-    fun formatTime(hour: Int, minute: Int): String {
-        return String.format(Locale.US, "%02d:%02d", hour, minute)
-    }
-
     fun getIsoDayOfWeek(dateKey: String): Int {
-        val cached = isoDayOfWeekCache[dateKey]
-        if (cached != null) return cached
-
-        val date = parseDateKey(dateKey) ?: return 1
-        val cal = Calendar.getInstance().apply {
-            firstDayOfWeek = Calendar.MONDAY
-            time = date
+        isoDayOfWeekCache[dateKey]?.let { return it }
+        val date = parseDateKey(dateKey) ?: return Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+        val cal = Calendar.getInstance().apply { time = date }
+        // ISO day: Monday=1 .. Sunday=7
+        val iso = when (cal.get(Calendar.DAY_OF_WEEK)) {
+            Calendar.MONDAY -> 1
+            Calendar.TUESDAY -> 2
+            Calendar.WEDNESDAY -> 3
+            Calendar.THURSDAY -> 4
+            Calendar.FRIDAY -> 5
+            Calendar.SATURDAY -> 6
+            else -> 7
         }
-        val day = cal.get(Calendar.DAY_OF_WEEK)
-        val res = if (day == Calendar.SUNDAY) 7 else day - 1
-        isoDayOfWeekCache[dateKey] = res
-        return res
+        isoDayOfWeekCache[dateKey] = iso
+        return iso
     }
 
     fun getDaysInSameWeek(dateKey: String): List<String> {
-        val cached = weekCache[dateKey]
-        if (cached != null) return cached
-
-        val date = parseDateKey(dateKey) ?: return listOf(dateKey)
-        val cal = Calendar.getInstance().apply {
-            firstDayOfWeek = Calendar.MONDAY
-            time = date
-            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+        weekCache[dateKey]?.let { return it }
+        val date = parseDateKey(dateKey) ?: return emptyList()
+        val cal = Calendar.getInstance().apply { time = date }
+        // Move to Monday
+        while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) cal.add(Calendar.DAY_OF_YEAR, -1)
+        val res = (0..6).map {
+            val d = Calendar.getInstance().apply { time = cal.time; add(Calendar.DAY_OF_YEAR, it) }
+            keyFormat.format(d.time)
         }
-        val list = ArrayList<String>(7)
-        repeat(7) {
-            list.add(keyFormat.format(cal.time))
-            cal.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        weekCache[dateKey] = list
-        return list
-    }
-
-    fun formatDaysOfWeekShort(daysOfWeekCsv: String, language: AppLanguage = AppLanguage.DE): String {
-        val cacheKey = "$daysOfWeekCsv-$language"
-        daysOfWeekShortCache[cacheKey]?.let { return it }
-
-        val days = daysOfWeekCsv.split(",").mapNotNull { it.trim().toIntOrNull() }.sorted()
-        val result = if (days.size == 7) {
-            if (language == AppLanguage.EN) "Daily" else "Täglich"
-        } else if (days == listOf(1, 2, 3, 4, 5)) {
-            if (language == AppLanguage.EN) "Weekdays" else "Werktage"
-        } else if (days == listOf(6, 7)) {
-            if (language == AppLanguage.EN) "Weekend" else "Wochenende"
-        } else {
-            val namesEn = mapOf(1 to "Mon", 2 to "Tue", 3 to "Wed", 4 to "Thu", 5 to "Fri", 6 to "Sat", 7 to "Sun")
-            val namesDe = mapOf(1 to "Mo", 2 to "Di", 3 to "Mi", 4 to "Do", 5 to "Fr", 6 to "Sa", 7 to "So")
-            val nameMap = if (language == AppLanguage.EN) namesEn else namesDe
-            days.mapNotNull { nameMap[it] }.joinToString(", ")
-        }
-        daysOfWeekShortCache[cacheKey] = result
-        return result
+        weekCache[dateKey] = res
+        return res
     }
 
     fun daysBetween(fromKey: String, toKey: String): Int {
-        if (fromKey == toKey) return 0
-        val d1 = parseDateKey(fromKey) ?: return 0
-        val d2 = parseDateKey(toKey) ?: return 0
-        val diffMs = d2.time - d1.time
-        return (diffMs / (24 * 60 * 60 * 1000L)).toInt()
+        val from = parseDateKey(fromKey) ?: return Int.MAX_VALUE
+        val to = parseDateKey(toKey) ?: return Int.MAX_VALUE
+        val diff = (to.time - from.time) / (1000 * 60 * 60 * 24)
+        return diff.toInt()
     }
 
-    fun addDays(dateKey: String, days: Int): String {
-        if (days == 0) return dateKey
-        val date = parseDateKey(dateKey) ?: return dateKey
-        val cal = Calendar.getInstance().apply {
-            time = date
-            add(Calendar.DAY_OF_YEAR, days)
+    fun wasTaskCreatedOnOrBefore(createdAtMillis: Long, dateKey: String): Boolean {
+        val createdDate = java.util.Date(createdAtMillis)
+        val createdKey = keyFormat.format(createdDate)
+        return createdKey <= dateKey
+    }
+
+    fun getEffectiveWeeklyTarget(targetDaysPerWeek: Int, createdAtMillis: Long, dateKey: String): Int {
+        // If task created mid-week, reduce target proportionally
+        val weekDays = getDaysInSameWeek(dateKey)
+        val createdKey = keyFormat.format(java.util.Date(createdAtMillis))
+        val createdIndex = weekDays.indexOf(createdKey).let { if (it < 0) 0 else it }
+        val availableDays = weekDays.size - createdIndex
+        val cappedTarget = targetDaysPerWeek.coerceIn(1, 7)
+        return ((cappedTarget.toDouble() / 7.0) * availableDays).coerceAtLeast(1.0).toInt()
+    }
+
+    fun getPastDays(count: Int): List<String> {
+        val now = Calendar.getInstance()
+        return (0 until count).map {
+            val c = Calendar.getInstance().apply { time = now.time; add(Calendar.DAY_OF_YEAR, -((count - 1) - it)) }
+            keyFormat.format(c.time)
         }
-        return keyFormat.format(cal.time)
     }
 
-    fun getRemainingDaysInWeek(dateKey: String): Int {
-        val isoDay = getIsoDayOfWeek(dateKey)
-        return (7 - isoDay + 1).coerceIn(1, 7)
+    fun isTaskDueOnDate(
+        frequencyType: String,
+        daysOfWeek: String,
+        targetDaysPerWeek: Int,
+        dateKey: String,
+        weeklyCompletedCount: Int,
+        isCompletedOnDate: Boolean,
+        intervalDays: Int,
+        intervalAnchorDate: String,
+        lastCompletionDateKey: String?,
+        createdAtMillis: Long
+    ): Boolean {
+        return when (frequencyType) {
+            "WEEKDAYS" -> {
+                val allowed = daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+                allowed.contains(getIsoDayOfWeek(dateKey))
+            }
+            "WEEKLY" -> {
+                val effective = getEffectiveWeeklyTarget(targetDaysPerWeek, createdAtMillis, dateKey)
+                weeklyCompletedCount < effective || !isCompletedOnDate
+            }
+            "INTERVAL" -> {
+                isIntervalTaskDue(intervalDays, intervalAnchorDate, lastCompletionDateKey, dateKey)
+            }
+            else -> true
+        }
     }
 
     fun isIntervalTaskDue(
@@ -212,12 +152,10 @@ object DateUtils {
         queryDateKey: String
     ): Boolean {
         val safeInterval = intervalDays.coerceAtLeast(1)
-        if (!lastCompletionDateKey.isNullOrBlank()) {
-            val nextDue = addDays(lastCompletionDateKey, safeInterval)
-            return queryDateKey >= nextDue
-        }
-        val anchor = if (anchorDateKey.isNotBlank()) anchorDateKey else queryDateKey
-        return queryDateKey >= anchor
+        val lastKey = lastCompletionDateKey ?: anchorDateKey
+        if (lastKey.isBlank()) return true
+        val days = daysBetween(lastKey, queryDateKey)
+        return days >= safeInterval
     }
 
     fun getDaysUntilIntervalDue(
@@ -227,109 +165,33 @@ object DateUtils {
         queryDateKey: String
     ): Int {
         val safeInterval = intervalDays.coerceAtLeast(1)
-        val nextDue = if (!lastCompletionDateKey.isNullOrBlank()) {
-            addDays(lastCompletionDateKey, safeInterval)
-        } else {
-            if (anchorDateKey.isNotBlank()) anchorDateKey else queryDateKey
-        }
-        return daysBetween(queryDateKey, nextDue)
+        val lastKey = lastCompletionDateKey ?: anchorDateKey
+        if (lastKey.isBlank()) return 0
+        val days = daysBetween(queryDateKey, lastKey)
+        return (safeInterval - days).coerceAtLeast(0)
     }
 
-    fun getEffectiveWeeklyTarget(
-        targetDaysPerWeek: Int,
-        createdAtMillis: Long,
-        queryDateKey: String
-    ): Int {
-        if (createdAtMillis <= 0L) return targetDaysPerWeek
-        val createdKey = getDateKeyFromMillis(createdAtMillis)
-        val queryWeekDays = getDaysInSameWeek(queryDateKey)
-        if (queryWeekDays.contains(createdKey)) {
-            val createdIsoDay = getIsoDayOfWeek(createdKey)
-            val daysAvailable = (7 - createdIsoDay + 1).coerceIn(1, 7)
-            return minOf(targetDaysPerWeek, daysAvailable)
-        }
-        return targetDaysPerWeek
+    fun getRemainingDaysInWeek(dateKey: String): Int {
+        val week = getDaysInSameWeek(dateKey)
+        val index = week.indexOf(dateKey).let { if (it < 0) 0 else it }
+        return (week.size - index - 1).coerceAtLeast(0)
     }
 
-    fun isTaskMandatoryOnDate(
-        frequencyType: String,
-        daysOfWeek: String,
-        targetDaysPerWeek: Int,
-        intervalDays: Int,
-        intervalAnchorDate: String,
-        lastCompletionDateKey: String?,
-        dateKey: String,
-        weeklyCompletedCount: Int,
-        isCompletedOnDate: Boolean,
-        createdAtMillis: Long = 0L
-    ): Boolean {
-        return when (frequencyType) {
-            "DAILY" -> true
-            "WEEKDAYS" -> {
-                val isoDay = getIsoDayOfWeek(dateKey)
-                daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(isoDay)
-            }
-            "INTERVAL" -> {
-                isIntervalTaskDue(intervalDays, intervalAnchorDate, lastCompletionDateKey, dateKey)
-            }
-            "WEEKLY" -> {
-                val effectiveTarget = getEffectiveWeeklyTarget(targetDaysPerWeek, createdAtMillis, dateKey)
-                if (weeklyCompletedCount >= effectiveTarget) {
-                    false
-                } else {
-                    val remainingDays = getRemainingDaysInWeek(dateKey)
-                    val needed = effectiveTarget - weeklyCompletedCount
-                    remainingDays <= needed
-                }
-            }
-            else -> true
-        }
+    fun getDayOfWeek(dateKey: String, language: AppLanguage = AppLanguage.DE): String {
+        val cacheKey = "$dateKey-$language"
+        displayDateCache[cacheKey]?.let { return it }
+        val iso = getIsoDayOfWeek(dateKey)
+        val label = if (language == AppLanguage.EN) daysEn[iso - 1] else daysDe[iso - 1]
+        displayDateCache[cacheKey] = label
+        return label
     }
 
-    fun isTaskDueOnDate(
-        frequencyType: String,
-        daysOfWeek: String,
-        targetDaysPerWeek: Int,
-        dateKey: String,
-        weeklyCompletedCount: Int = 0,
-        isCompletedOnDate: Boolean = false,
-        intervalDays: Int = 1,
-        intervalAnchorDate: String = "",
-        lastCompletionDateKey: String? = null,
-        createdAtMillis: Long = 0L
-    ): Boolean {
-        return when (frequencyType) {
-            "WEEKDAYS" -> {
-                val isoDay = getIsoDayOfWeek(dateKey)
-                daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(isoDay)
-            }
-            "WEEKLY" -> {
-                val effectiveTarget = getEffectiveWeeklyTarget(targetDaysPerWeek, createdAtMillis, dateKey)
-                val isGoalMet = weeklyCompletedCount >= effectiveTarget
-                val remainingDays = getRemainingDaysInWeek(dateKey)
-                val needed = effectiveTarget - weeklyCompletedCount
-                val isMandatory = !isGoalMet && needed > 0 && remainingDays <= needed
-                isMandatory || isCompletedOnDate
-            }
-            "INTERVAL" -> {
-                isIntervalTaskDue(intervalDays, intervalAnchorDate, lastCompletionDateKey, dateKey) || isCompletedOnDate
-            }
-            else -> true
-        }
-    }
-
-    fun getDateKeyFromMillis(millis: Long): String {
-        return try {
-            keyFormat.format(java.util.Date(millis))
-        } catch (e: Exception) {
-            getTodayKey()
-        }
-    }
-
-    fun wasTaskCreatedOnOrBefore(createdAtMillis: Long, dateKey: String): Boolean {
-        if (createdAtMillis <= 0L) return true
-        val createdKey = getDateKeyFromMillis(createdAtMillis)
-        if (createdKey.isBlank()) return true
-        return createdKey <= dateKey
+    fun getDayNumber(dateKey: String): String {
+        dayNumberCache[dateKey]?.let { return it }
+        val date = parseDateKey(dateKey) ?: return ""
+        val cal = Calendar.getInstance().apply { time = date }
+        val num = cal.get(Calendar.DAY_OF_MONTH).toString()
+        dayNumberCache[dateKey] = num
+        return num
     }
 }
