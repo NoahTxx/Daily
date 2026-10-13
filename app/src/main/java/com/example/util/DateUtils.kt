@@ -18,12 +18,26 @@ object DateUtils {
 
     private val isoDayOfWeekCache = ConcurrentHashMap<String, Int>(64)
     private val weekCache = ConcurrentHashMap<String, List<String>>(128)
+    private val parsedDateCache = ConcurrentHashMap<String, java.util.Date>(128)
     private val displayDateCache = ConcurrentHashMap<String, String>(64)
     private val shortDisplayCache = ConcurrentHashMap<String, String>(64)
     private val daysOfWeekShortCache = ConcurrentHashMap<String, String>(64)
     private val dayNumberCache = ConcurrentHashMap<String, String>(64)
     private val daysEn = arrayOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
     private val daysDe = arrayOf("MO", "DI", "MI", "DO", "FR", "SA", "SO")
+
+    private fun parseDateKey(dateKey: String): java.util.Date? {
+        if (dateKey.isBlank()) return null
+        val cached = parsedDateCache[dateKey]
+        if (cached != null) return cached
+        return try {
+            val parsed = keyFormat.parse(dateKey) ?: return null
+            parsedDateCache[dateKey] = parsed
+            parsed
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     fun getTodayKey(): String {
         val now = System.currentTimeMillis()
@@ -45,43 +59,35 @@ object DateUtils {
         val cacheKey = "$dateKey-$language-$isTodayDate"
         displayDateCache[cacheKey]?.let { return it }
 
-        return try {
-            val date = keyFormat.parse(dateKey) ?: return dateKey
-            val isEn = language == AppLanguage.EN
-            val result = if (isTodayDate) {
-                if (isEn) {
-                    "TODAY, " + SimpleDateFormat("MMMM d", Locale.US).format(date).uppercase()
-                } else {
-                    "HEUTE, " + SimpleDateFormat("d. MMMM", Locale.GERMAN).format(date).uppercase()
-                }
+        val date = parseDateKey(dateKey) ?: return dateKey
+        val isEn = language == AppLanguage.EN
+        val result = if (isTodayDate) {
+            if (isEn) {
+                "TODAY, " + SimpleDateFormat("MMMM d", Locale.US).format(date).uppercase()
             } else {
-                if (isEn) {
-                    SimpleDateFormat("EEEE, MMMM d", Locale.US).format(date).uppercase()
-                } else {
-                    SimpleDateFormat("EEEE, d. MMMM", Locale.GERMAN).format(date).uppercase()
-                }
+                "HEUTE, " + SimpleDateFormat("d. MMMM", Locale.GERMAN).format(date).uppercase()
             }
-            displayDateCache[cacheKey] = result
-            result
-        } catch (e: Exception) {
-            dateKey
+        } else {
+            if (isEn) {
+                SimpleDateFormat("EEEE, MMMM d", Locale.US).format(date).uppercase()
+            } else {
+                SimpleDateFormat("EEEE, d. MMMM", Locale.GERMAN).format(date).uppercase()
+            }
         }
+        displayDateCache[cacheKey] = result
+        return result
     }
 
     fun formatShortDisplay(dateKey: String, language: AppLanguage = AppLanguage.DE): String {
         val cacheKey = "$dateKey-$language"
         shortDisplayCache[cacheKey]?.let { return it }
 
-        return try {
-            val date = keyFormat.parse(dateKey) ?: return dateKey
-            val locale = if (language == AppLanguage.EN) Locale.US else Locale.GERMAN
-            val pattern = if (language == AppLanguage.EN) "EEE, MMM d" else "EE, d. MMM"
-            val result = SimpleDateFormat(pattern, locale).format(date).uppercase()
-            shortDisplayCache[cacheKey] = result
-            result
-        } catch (e: Exception) {
-            dateKey
-        }
+        val date = parseDateKey(dateKey) ?: return dateKey
+        val locale = if (language == AppLanguage.EN) Locale.US else Locale.GERMAN
+        val pattern = if (language == AppLanguage.EN) "EEE, MMM d" else "EE, d. MMM"
+        val result = SimpleDateFormat(pattern, locale).format(date).uppercase()
+        shortDisplayCache[cacheKey] = result
+        return result
     }
 
     fun getDayOfWeek(dateKey: String, language: AppLanguage = AppLanguage.DE): String {
@@ -106,10 +112,11 @@ object DateUtils {
     }
 
     fun getPastDays(daysCount: Int): List<String> {
+        if (daysCount <= 0) return emptyList()
         val list = ArrayList<String>(daysCount)
         val cal = Calendar.getInstance()
         cal.add(Calendar.DAY_OF_YEAR, -(daysCount - 1))
-        for (i in 0 until daysCount) {
+        repeat(daysCount) {
             list.add(keyFormat.format(cal.time))
             cal.add(Calendar.DAY_OF_YEAR, 1)
         }
@@ -124,55 +131,41 @@ object DateUtils {
         val cached = isoDayOfWeekCache[dateKey]
         if (cached != null) return cached
 
-        return try {
-            val date = keyFormat.parse(dateKey) ?: 1
-            val cal = Calendar.getInstance().apply {
-                firstDayOfWeek = Calendar.MONDAY
-                time = date as java.util.Date
-            }
-            val day = cal.get(Calendar.DAY_OF_WEEK)
-            val res = if (day == Calendar.SUNDAY) 7 else day - 1
-            isoDayOfWeekCache[dateKey] = res
-            res
-        } catch (e: Exception) {
-            1
+        val date = parseDateKey(dateKey) ?: return 1
+        val cal = Calendar.getInstance().apply {
+            firstDayOfWeek = Calendar.MONDAY
+            time = date
         }
-    }
-
-    fun parseWeekdaySet(daysOfWeek: String): Set<Int> {
-        if (daysOfWeek.isBlank()) return emptySet()
-        return daysOfWeek.split(",")
-            .mapNotNull { it.trim().toIntOrNull() }
-            .toSet()
+        val day = cal.get(Calendar.DAY_OF_WEEK)
+        val res = if (day == Calendar.SUNDAY) 7 else day - 1
+        isoDayOfWeekCache[dateKey] = res
+        return res
     }
 
     fun getDaysInSameWeek(dateKey: String): List<String> {
-        weekCache[dateKey]?.let { return it }
+        val cached = weekCache[dateKey]
+        if (cached != null) return cached
 
-        return try {
-            val date = keyFormat.parse(dateKey) ?: return listOf(dateKey)
-            val cal = Calendar.getInstance().apply {
-                firstDayOfWeek = Calendar.MONDAY
-                time = date
-                set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-            }
-            val list = ArrayList<String>(7)
-            for (i in 0 until 7) {
-                list.add(keyFormat.format(cal.time))
-                cal.add(Calendar.DAY_OF_YEAR, 1)
-            }
-            weekCache[dateKey] = list
-            list
-        } catch (e: Exception) {
-            listOf(dateKey)
+        val date = parseDateKey(dateKey) ?: return listOf(dateKey)
+        val cal = Calendar.getInstance().apply {
+            firstDayOfWeek = Calendar.MONDAY
+            time = date
+            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
         }
+        val list = ArrayList<String>(7)
+        repeat(7) {
+            list.add(keyFormat.format(cal.time))
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        weekCache[dateKey] = list
+        return list
     }
 
     fun formatDaysOfWeekShort(daysOfWeekCsv: String, language: AppLanguage = AppLanguage.DE): String {
         val cacheKey = "$daysOfWeekCsv-$language"
         daysOfWeekShortCache[cacheKey]?.let { return it }
 
-        val days = parseWeekdaySet(daysOfWeekCsv).toList().sorted()
+        val days = daysOfWeekCsv.split(",").mapNotNull { it.trim().toIntOrNull() }.sorted()
         val result = if (days.size == 7) {
             if (language == AppLanguage.EN) "Daily" else "Täglich"
         } else if (days == listOf(1, 2, 3, 4, 5)) {
@@ -191,27 +184,20 @@ object DateUtils {
 
     fun daysBetween(fromKey: String, toKey: String): Int {
         if (fromKey == toKey) return 0
-        return try {
-            val d1 = keyFormat.parse(fromKey) ?: return 0
-            val d2 = keyFormat.parse(toKey) ?: return 0
-            val diffMs = d2.time - d1.time
-            (diffMs / (24 * 60 * 60 * 1000L)).toInt()
-        } catch (e: Exception) {
-            0
-        }
+        val d1 = parseDateKey(fromKey) ?: return 0
+        val d2 = parseDateKey(toKey) ?: return 0
+        val diffMs = d2.time - d1.time
+        return (diffMs / (24 * 60 * 60 * 1000L)).toInt()
     }
 
     fun addDays(dateKey: String, days: Int): String {
         if (days == 0) return dateKey
-        return try {
-            val cal = Calendar.getInstance().apply {
-                time = keyFormat.parse(dateKey) ?: return dateKey
-                add(Calendar.DAY_OF_YEAR, days)
-            }
-            keyFormat.format(cal.time)
-        } catch (e: Exception) {
-            dateKey
+        val date = parseDateKey(dateKey) ?: return dateKey
+        val cal = Calendar.getInstance().apply {
+            time = date
+            add(Calendar.DAY_OF_YEAR, days)
         }
+        return keyFormat.format(cal.time)
     }
 
     fun getRemainingDaysInWeek(dateKey: String): Int {
@@ -281,7 +267,7 @@ object DateUtils {
             "DAILY" -> true
             "WEEKDAYS" -> {
                 val isoDay = getIsoDayOfWeek(dateKey)
-                parseWeekdaySet(daysOfWeek).contains(isoDay)
+                daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(isoDay)
             }
             "INTERVAL" -> {
                 isIntervalTaskDue(intervalDays, intervalAnchorDate, lastCompletionDateKey, dateKey)
@@ -315,7 +301,7 @@ object DateUtils {
         return when (frequencyType) {
             "WEEKDAYS" -> {
                 val isoDay = getIsoDayOfWeek(dateKey)
-                parseWeekdaySet(daysOfWeek).contains(isoDay)
+                daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(isoDay)
             }
             "WEEKLY" -> {
                 val effectiveTarget = getEffectiveWeeklyTarget(targetDaysPerWeek, createdAtMillis, dateKey)
