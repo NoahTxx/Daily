@@ -30,10 +30,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,16 +89,20 @@ class MainActivity : ComponentActivity() {
             val selectedBodyFont by appSettings.selectedBodyFont.collectAsStateWithLifecycle()
             val selectedLanguage by appSettings.selectedLanguage.collectAsStateWithLifecycle()
 
-            val headingFontFamily = when (selectedHeadingFont) {
-                HeadingFont.NDOT -> NDotFontFamily
-                HeadingFont.GEIST -> GeistMonoFontFamily
-                HeadingFont.SILKSCREEN -> SilkscreenFontFamily
-                HeadingFont.SANS -> FontFamily.SansSerif
+            val headingFontFamily = remember(selectedHeadingFont) {
+                when (selectedHeadingFont) {
+                    HeadingFont.NDOT -> NDotFontFamily
+                    HeadingFont.GEIST -> GeistMonoFontFamily
+                    HeadingFont.SILKSCREEN -> SilkscreenFontFamily
+                    HeadingFont.SANS -> FontFamily.SansSerif
+                }
             }
-            val bodyFontFamily = when (selectedBodyFont) {
-                BodyFont.GEIST -> GeistFontFamily
-                BodyFont.MONO -> GeistMonoFontFamily
-                BodyFont.SANS -> FontFamily.SansSerif
+            val bodyFontFamily = remember(selectedBodyFont) {
+                when (selectedBodyFont) {
+                    BodyFont.GEIST -> GeistFontFamily
+                    BodyFont.MONO -> GeistMonoFontFamily
+                    BodyFont.SANS -> FontFamily.SansSerif
+                }
             }
 
             CompositionLocalProvider(
@@ -121,9 +125,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
-    var currentTab by remember { mutableStateOf(DailyNavTab.TODAY) }
-    var showEditSheet by remember { mutableStateOf(false) }
-    var taskToEdit by remember { mutableStateOf<DailyTask?>(null) }
+    var currentTab by rememberSaveable { mutableStateOf(DailyNavTab.TODAY) }
+    var showEditSheet by rememberSaveable { mutableStateOf(false) }
+    var taskToEdit by rememberSaveable { mutableStateOf<DailyTask?>(null) }
 
     val selectedDateKey by viewModel.selectedDateKey.collectAsStateWithLifecycle()
     val tasksWithCompletions by viewModel.tasksWithCompletions.collectAsStateWithLifecycle()
@@ -134,7 +138,25 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
     val streakStats by viewModel.streakStats.collectAsStateWithLifecycle()
     val allCompletionDates by viewModel.allCompletionDates.collectAsStateWithLifecycle()
 
-    // Handle back button when not on TODAY tab
+    val openTaskEditor: (DailyTask?) -> Unit = remember {
+        { task ->
+            taskToEdit = task
+            showEditSheet = true
+        }
+    }
+    val dismissTaskEditor = remember {
+        {
+            showEditSheet = false
+            taskToEdit = null
+        }
+    }
+    val onAddTaskClick = remember {
+        {
+            taskToEdit = null
+            showEditSheet = true
+        }
+    }
+
     BackHandler(enabled = currentTab != DailyNavTab.TODAY) {
         currentTab = DailyNavTab.TODAY
     }
@@ -155,14 +177,10 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
                         selectedCategory = selectedCategory,
                         currentStreak = currentStreak,
                         completionDates = allCompletionDates,
-                        onAddTaskClick = {
-                            taskToEdit = null
-                            showEditSheet = true
-                        },
+                        onAddTaskClick = onAddTaskClick,
                         onEditTaskClick = { task ->
                             if (DateUtils.isToday(selectedDateKey)) {
-                                taskToEdit = task
-                                showEditSheet = true
+                                openTaskEditor(task)
                             }
                         }
                     )
@@ -172,13 +190,9 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
                     RoutinesScreen(
                         viewModel = viewModel,
                         tasks = allTasks,
-                        onAddTaskClick = {
-                            taskToEdit = null
-                            showEditSheet = true
-                        },
+                        onAddTaskClick = onAddTaskClick,
                         onEditTaskClick = { task ->
-                            taskToEdit = task
-                            showEditSheet = true
+                            openTaskEditor(task)
                         }
                     )
                 }
@@ -199,7 +213,6 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
                 }
             }
 
-            // Floating pill navigation pinned to bottom with zero block behind it
             NothingBottomNavigation(
                 currentTab = currentTab,
                 onTabSelected = { currentTab = it },
@@ -207,19 +220,17 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
             )
         }
 
-        // Add / Edit Task Modal Sheet
         if (showEditSheet) {
             TaskEditDialog(
                 task = taskToEdit,
-                onDismiss = {
-                    showEditSheet = false
-                    taskToEdit = null
-                },
+                onDismiss = dismissTaskEditor,
                 onSave = { updatedTask ->
                     viewModel.saveTask(updatedTask)
+                    dismissTaskEditor()
                 },
                 onDelete = { taskToDelete ->
                     viewModel.deleteTask(taskToDelete)
+                    dismissTaskEditor()
                 }
             )
         }
