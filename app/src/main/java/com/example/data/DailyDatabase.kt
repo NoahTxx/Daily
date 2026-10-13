@@ -19,6 +19,7 @@ abstract class DailyDatabase : RoomDatabase() {
 
     companion object {
         private const val TAG = "DailyDatabase"
+        private const val DB_NAME = "daily_habits.db"
 
         @Volatile
         private var INSTANCE: DailyDatabase? = null
@@ -35,50 +36,6 @@ abstract class DailyDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN intervalDays INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN intervalAnchorDate TEXT NOT NULL DEFAULT ''")
-            }
-        }
-
-        private val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("DROP INDEX IF EXISTS index_daily_tasks_isArchived_orderIndex")
-                db.execSQL("DROP INDEX IF EXISTS index_daily_tasks_reminderEnabled")
-                db.execSQL("DROP INDEX IF EXISTS index_task_completions_taskId_dateKey")
-                db.execSQL("DROP INDEX IF EXISTS index_task_completions_dateKey")
-
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_isArchived_orderIndex ON daily_tasks (isArchived, orderIndex, id)"
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_reminderEnabled ON daily_tasks (isArchived, reminderEnabled)"
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS index_task_completions_taskId_dateKey ON task_completions (taskId, dateKey)"
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_task_completions_dateKey ON task_completions (dateKey)"
-                )
-            }
-        }
-
-        private val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("DROP INDEX IF EXISTS index_daily_tasks_isArchived_orderIndex")
-                db.execSQL("DROP INDEX IF EXISTS index_daily_tasks_reminderEnabled")
-                db.execSQL("DROP INDEX IF EXISTS index_task_completions_taskId_dateKey")
-                db.execSQL("DROP INDEX IF EXISTS index_task_completions_dateKey")
-
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_isArchived_orderIndex ON daily_tasks (isArchived, orderIndex, id)"
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_reminderEnabled ON daily_tasks (isArchived, reminderEnabled)"
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS index_task_completions_taskId_dateKey ON task_completions (taskId, dateKey)"
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_task_completions_dateKey ON task_completions (dateKey)"
-                )
             }
         }
 
@@ -108,9 +65,13 @@ abstract class DailyDatabase : RoomDatabase() {
             return Room.databaseBuilder(
                 context.applicationContext,
                 DailyDatabase::class.java,
-                "daily_habits.db"
+                DB_NAME
             )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_4_6)
+                .addMigrations(
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_6
+                )
                 .fallbackToDestructiveMigration()
                 .build()
         }
@@ -120,15 +81,14 @@ abstract class DailyDatabase : RoomDatabase() {
                 INSTANCE ?: run {
                     val db = try {
                         val candidate = buildDatabase(context)
-                        // Force opening the database to validate schema & execute migrations synchronously
                         candidate.openHelper.writableDatabase
                         candidate
                     } catch (t: Throwable) {
-                        Log.e(TAG, "Database initialization or migration error, recovering with fresh database", t)
+                        Log.e(TAG, "Database initialization or migration failed; resetting local database", t)
                         try {
-                            context.applicationContext.deleteDatabase("daily_habits.db")
+                            context.applicationContext.deleteDatabase(DB_NAME)
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to delete corrupted database file", e)
+                            Log.e(TAG, "Failed to remove corrupted database", e)
                         }
                         val fallback = buildDatabase(context)
                         fallback.openHelper.writableDatabase
