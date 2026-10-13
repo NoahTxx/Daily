@@ -25,6 +25,7 @@ class DailyRepository(
             }
 
             relevantTasks.map { task ->
+                // Delegate full per-task status calculation to central calculator
                 TaskStatusCalculator.evaluate(
                     task = task,
                     dateKey = dateKey,
