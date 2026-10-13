@@ -2,10 +2,17 @@ package com.example.data
 
 import androidx.compose.runtime.Immutable
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Immutable
-@Entity(tableName = "daily_tasks")
+@Entity(
+    tableName = "daily_tasks",
+    indices = [
+        Index(value = ["isArchived", "orderIndex", "id"], name = "index_daily_tasks_isArchived_orderIndex"),
+        Index(value = ["isArchived", "reminderEnabled"], name = "index_daily_tasks_reminderEnabled")
+    ]
+)
 data class DailyTask(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

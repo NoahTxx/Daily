@@ -2,8 +2,11 @@ package com.example.data
 
 import android.content.Context
 import com.example.util.DateUtils
+import com.example.widget.DailyWidgetProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.withContext
 
 class DailyRepository(
     private val dao: DailyTaskDao,
@@ -12,6 +15,7 @@ class DailyRepository(
 
     fun getTasksWithCompletions(dateKey: String): Flow<List<TaskWithCompletion>> {
         val weekDays = DateUtils.getDaysInSameWeek(dateKey)
+        val isoDay = DateUtils.getIsoDayOfWeek(dateKey)
 
         return combine(
             dao.getAllActiveTasksFlow(),
@@ -23,73 +27,459 @@ class DailyRepository(
             val completionsByTaskThisWeek = weekCompletions.groupBy { it.taskId }
             val completionsByTask = allCompletions.groupBy { it.taskId }
 
+            // Only show tasks that existed on or before dateKey, or have an existing completion for that date
             val relevantTasks = tasks.filter { task ->
-                DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, dateKey) ||
-                    completedMapToday.containsKey(task.id)
+                DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, dateKey) || completedMapToday.containsKey(task.id)
             }
 
             relevantTasks.map { task ->
                 val completionToday = completedMapToday[task.id]
-                val countToday = completionToday?.count ?: 0
-                val isDoneToday = if (task.isCounter) {
-                    countToday >= task.targetCount
-                } else {
-                    completionToday != null
+                val currentCount = completionToday?.count ?: 0
+                val isDoneToday = if (task.isCounter) currentCount >= task.targetCount else completionToday != null
+
+                val weekList = completionsByTaskThisWeek[task.id] ?: emptyList()
+                val weeklyCompletedCount = weekList.count { comp ->
+                    if (task.isCounter) comp.count >= task.targetCount else comp.count > 0
                 }
-
-                val weeklyList = completionsByTaskThisWeek[task.id].orEmpty()
-                val weeklyCompletedCount = weeklyList.count { completion ->
-                    if (task.isCounter) completion.count >= task.targetCount else completion.count > 0
-                }
-
-                val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(
-                    task.targetDaysPerWeek,
-                    task.createdAt,
-                    dateKey
-                )
-
+                val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, dateKey)
                 val isWeeklyGoalMet = when (task.frequencyType) {
                     "WEEKLY" -> weeklyCompletedCount >= effectiveTarget
-                    "WEEKDAYS" -> weeklyCompletedCount >= effectiveTarget
                     else -> isDoneToday
                 }
 
-                val lastCompletionDateKey = completionToday?.dateKey
-                val daysUntilDue = when (task.frequencyType) {
-                    "INTERVAL" -> {
-                        val intervalDays = task.intervalDays.coerceAtLeast(1)
-                        val anchor = task.intervalAnchorDate.ifBlank { dateKey }
-                        val lastKey = lastCompletionDateKey ?: anchor
-                        val diff = DateUtils.daysBetween(lastKey, dateKey)
-                        (intervalDays - diff).coerceAtLeast(0)
+                val allTaskComps = completionsByTask[task.id] ?: emptyList()
+                val lastCompBeforeDate = allTaskComps
+                    .filter { it.dateKey < dateKey && (if (task.isCounter) it.count >= task.targetCount else it.count > 0) }
+                    .maxOfOrNull { it.dateKey }
+
+                val isDueToday: Boolean
+                val isMandatoryToday: Boolean
+                val daysUntilDue: Int
+
+                when (task.frequencyType) {
+                    "WEEKDAYS" -> {
+                        val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
+                        isDueToday = allowed.contains(isoDay)
+                        isMandatoryToday = isDueToday
+                        daysUntilDue = 0
                     }
-                    else -> 0
+                    "WEEKLY" -> {
+                        val remainingDays = DateUtils.getRemainingDaysInWeek(dateKey)
+                        val needed = effectiveTarget - weeklyCompletedCount
+                        isMandatoryToday = !isWeeklyGoalMet && needed > 0 && remainingDays <= needed
+                        isDueToday = isMandatoryToday || isDoneToday
+                        daysUntilDue = 0
+                    }
+                    "INTERVAL" -> {
+                        val intervalDue = DateUtils.isIntervalTaskDue(
+                            intervalDays = task.intervalDays,
+                            anchorDateKey = task.intervalAnchorDate,
+                            lastCompletionDateKey = lastCompBeforeDate,
+                            queryDateKey = dateKey
+                        )
+                        isDueToday = intervalDue || isDoneToday
+                        isMandatoryToday = intervalDue
+                        daysUntilDue = DateUtils.getDaysUntilIntervalDue(
+                            intervalDays = task.intervalDays,
+                            anchorDateKey = task.intervalAnchorDate,
+                            lastCompletionDateKey = lastCompBeforeDate,
+                            queryDateKey = dateKey
+                        )
+                    }
+                    else -> {
+                        // DAILY
+                        isDueToday = true
+                        isMandatoryToday = true
+                        daysUntilDue = 0
+                    }
                 }
 
                 TaskWithCompletion(
                     task = task,
                     isCompleted = isDoneToday,
-                    count = countToday,
+                    count = currentCount,
                     completedAt = completionToday?.completedAt,
                     weeklyCompletedCount = weeklyCompletedCount,
-                    isDueToday = true,
+                    isDueToday = isDueToday,
                     isWeeklyGoalMet = isWeeklyGoalMet,
-                    isMandatoryToday = true,
+                    isMandatoryToday = isMandatoryToday,
                     daysUntilDue = daysUntilDue,
-                    lastCompletionDateKey = lastCompletionDateKey
+                    lastCompletionDateKey = lastCompBeforeDate
                 )
             }
         }
     }
 
-    fun getTaskById(id: Long) = dao.getTaskById(id)
-    fun getTaskByIdSync(id: Long) = dao.getTaskByIdSync(id)
-    fun getAllTasksFlow() = dao.getAllTasksFlow()
-    fun getAllActiveTasksFlow() = dao.getAllActiveTasksFlow()
-    fun getAllCompletionsFlow() = dao.getAllCompletionsFlow()
+    fun getAllActiveTasks(): Flow<List<DailyTask>> = dao.getAllActiveTasksFlow()
+    fun getAllActiveTasksFlow(): Flow<List<DailyTask>> = dao.getAllActiveTasksFlow()
 
-    suspend fun deleteTask(task: DailyTask) = dao.deleteTask(task)
-    suspend fun deleteTaskById(id: Long) = dao.deleteTaskById(id)
-    suspend fun insertTask(task: DailyTask) = dao.insertTask(task)
-    suspend fun updateTask(task: DailyTask) = dao.updateTask(task)
+    fun getAllTasks(): Flow<List<DailyTask>> = dao.getAllTasksFlow()
+    fun getAllTasksFlow(): Flow<List<DailyTask>> = dao.getAllTasksFlow()
+
+    suspend fun getTaskById(id: Long): DailyTask? = dao.getTaskById(id)
+    fun getTaskByIdSync(id: Long): DailyTask? = dao.getTaskByIdSync(id)
+
+    suspend fun toggleTaskCompletion(taskId: Long, dateKey: String): Boolean = withContext(Dispatchers.IO) {
+        val task = dao.getTaskById(taskId)
+        val existing = dao.getCompletion(taskId, dateKey)
+
+        // If task is scheduled for specific weekdays, verify it is due on dateKey
+        if (task?.frequencyType == "WEEKDAYS") {
+            val isoDay = DateUtils.getIsoDayOfWeek(dateKey)
+            val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
+            if (!allowed.contains(isoDay)) {
+                // Not due on this day: cannot check off. If previously completed, allow unchecking.
+                if (existing != null) {
+                    dao.deleteCompletion(taskId, dateKey)
+                    DailyWidgetProvider.notifyDataChanged(context)
+                }
+                return@withContext false
+            }
+        }
+
+        val isNowCompleted: Boolean
+        if (task?.isCounter == true) {
+            // For counter task, toggling marks full target or resets to 0
+            if (existing != null && existing.count >= task.targetCount) {
+                dao.deleteCompletion(taskId, dateKey)
+                isNowCompleted = false
+            } else {
+                dao.insertCompletion(
+                    TaskCompletion(
+                        id = existing?.id ?: 0,
+                        taskId = taskId,
+                        dateKey = dateKey,
+                        count = task.targetCount
+                    )
+                )
+                isNowCompleted = true
+            }
+        } else {
+            if (existing != null) {
+                dao.deleteCompletion(taskId, dateKey)
+                isNowCompleted = false
+            } else {
+                dao.insertCompletion(TaskCompletion(taskId = taskId, dateKey = dateKey, count = 1))
+                isNowCompleted = true
+            }
+        }
+        if (isNowCompleted) {
+            com.example.reminder.ReminderManager.cancelTaskSnooze(context, taskId)
+        }
+        // Update widget
+        DailyWidgetProvider.notifyDataChanged(context)
+        isNowCompleted
+    }
+
+    suspend fun incrementTaskCounter(taskId: Long, dateKey: String, amount: Int): Int = withContext(Dispatchers.IO) {
+        val task = dao.getTaskById(taskId) ?: return@withContext 0
+        val existing = dao.getCompletion(taskId, dateKey)
+        val current = existing?.count ?: 0
+
+        // If task is not due on dateKey, do not allow incrementing
+        if (task.frequencyType == "WEEKDAYS") {
+            val isoDay = DateUtils.getIsoDayOfWeek(dateKey)
+            val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
+            if (!allowed.contains(isoDay)) {
+                if (amount < 0 && current > 0) {
+                    val newCount = (current + amount).coerceAtLeast(0)
+                    if (newCount == 0) dao.deleteCompletion(taskId, dateKey)
+                    else dao.insertCompletion(TaskCompletion(id = existing?.id ?: 0, taskId = taskId, dateKey = dateKey, count = newCount))
+                    DailyWidgetProvider.notifyDataChanged(context)
+                    return@withContext newCount
+                }
+                return@withContext current
+            }
+        }
+
+        if (amount < 0 && current == 0) {
+            return@withContext 0
+        }
+        val newCount = (current + amount).coerceAtLeast(0)
+        if (newCount == 0) {
+            dao.deleteCompletion(taskId, dateKey)
+        } else {
+            dao.insertCompletion(
+                TaskCompletion(
+                    id = existing?.id ?: 0,
+                    taskId = taskId,
+                    dateKey = dateKey,
+                    count = newCount
+                )
+            )
+        }
+        if (task.isCounter && newCount >= task.targetCount) {
+            com.example.reminder.ReminderManager.cancelTaskSnooze(context, taskId)
+        }
+        DailyWidgetProvider.notifyDataChanged(context)
+        newCount
+    }
+
+    suspend fun setTaskCounter(taskId: Long, dateKey: String, count: Int): Int = withContext(Dispatchers.IO) {
+        val task = dao.getTaskById(taskId)
+        val existing = dao.getCompletion(taskId, dateKey)
+        val clampedCount = count.coerceAtLeast(0)
+
+        if (task?.frequencyType == "WEEKDAYS") {
+            val isoDay = DateUtils.getIsoDayOfWeek(dateKey)
+            val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
+            if (!allowed.contains(isoDay) && clampedCount > 0) {
+                return@withContext existing?.count ?: 0
+            }
+        }
+
+        if (clampedCount == 0) {
+            dao.deleteCompletion(taskId, dateKey)
+        } else {
+            dao.insertCompletion(
+                TaskCompletion(
+                    id = existing?.id ?: 0,
+                    taskId = taskId,
+                    dateKey = dateKey,
+                    count = clampedCount
+                )
+            )
+        }
+        if (task != null && task.isCounter && clampedCount >= task.targetCount) {
+            com.example.reminder.ReminderManager.cancelTaskSnooze(context, taskId)
+        }
+        DailyWidgetProvider.notifyDataChanged(context)
+        clampedCount
+    }
+
+    suspend fun insertTask(task: DailyTask): Long = withContext(Dispatchers.IO) {
+        val id = dao.insertTask(task)
+        DailyWidgetProvider.notifyDataChanged(context)
+        id
+    }
+
+    suspend fun updateTask(task: DailyTask) = withContext(Dispatchers.IO) {
+        dao.updateTask(task)
+        DailyWidgetProvider.notifyDataChanged(context)
+    }
+
+    suspend fun deleteTask(task: DailyTask) = withContext(Dispatchers.IO) {
+        dao.deleteAllCompletionsForTask(task.id)
+        dao.deleteTask(task)
+        DailyWidgetProvider.notifyDataChanged(context)
+    }
+
+    suspend fun deleteTaskById(id: Long) = withContext(Dispatchers.IO) {
+        dao.deleteAllCompletionsForTask(id)
+        dao.deleteTaskById(id)
+        DailyWidgetProvider.notifyDataChanged(context)
+    }
+
+    suspend fun seedDefaultsIfEmpty() = withContext(Dispatchers.IO) {
+        if (dao.getTaskCount() == 0) {
+            val defaults = listOf(
+                DailyTask(
+                    title = "Vitamin D3 + K2 & Omega-3",
+                    category = "Supplements",
+                    reminderHour = 8,
+                    reminderMinute = 30,
+                    reminderEnabled = true,
+                    iconName = "pill",
+                    orderIndex = 0,
+                    createdAt = 0L
+                ),
+                DailyTask(
+                    title = "1.5L Wasser bis Mittag",
+                    category = "Gesundheit",
+                    reminderHour = 12,
+                    reminderMinute = 0,
+                    reminderEnabled = true,
+                    iconName = "water",
+                    orderIndex = 1,
+                    createdAt = 0L
+                ),
+                DailyTask(
+                    title = "20 Min Fokus-Lesen",
+                    category = "Fokus",
+                    reminderHour = 20,
+                    reminderMinute = 0,
+                    reminderEnabled = false,
+                    iconName = "book",
+                    orderIndex = 2,
+                    createdAt = 0L
+                ),
+                DailyTask(
+                    title = "Magnesium vor dem Schlafen",
+                    category = "Supplements",
+                    reminderHour = 22,
+                    reminderMinute = 0,
+                    reminderEnabled = true,
+                    iconName = "pill",
+                    orderIndex = 3,
+                    createdAt = 0L
+                ),
+                DailyTask(
+                    title = "100 Liegestütze",
+                    category = "Sport",
+                    reminderHour = 18,
+                    reminderMinute = 0,
+                    reminderEnabled = true,
+                    iconName = "fitness",
+                    orderIndex = 4,
+                    isCounter = true,
+                    targetCount = 100,
+                    unit = "Wdh.",
+                    createdAt = 0L
+                )
+            )
+            defaults.forEach { dao.insertTask(it) }
+            DailyWidgetProvider.notifyDataChanged(context)
+        }
+    }
+
+    fun getRecentCompletions(startDateKey: String): Flow<List<TaskCompletion>> {
+        return dao.getRecentCompletionsFlow(startDateKey)
+    }
+
+    fun getAllCompletions(): Flow<List<TaskCompletion>> {
+        return dao.getAllCompletionsFlow()
+    }
+
+    fun getAllCompletionsFlow(): Flow<List<TaskCompletion>> {
+        return dao.getAllCompletionsFlow()
+    }
+
+    fun getAllCompletionDates(): Flow<List<String>> {
+        return dao.getAllCompletionDatesFlow()
+    }
+
+    fun getFullyCompletedDates(): Flow<List<String>> {
+        return combine(
+            dao.getAllActiveTasksFlow(),
+            dao.getAllCompletionsFlow()
+        ) { tasks, allCompletions ->
+            calculateFullyCompletedDates(tasks, allCompletions)
+        }
+    }
+
+    fun getFullyCompletedDatesSync(): List<String> {
+        val tasks = dao.getAllActiveTasksSync()
+        val allCompletions = dao.getAllCompletionsSync()
+        return calculateFullyCompletedDates(tasks, allCompletions)
+    }
+
+    private fun calculateFullyCompletedDates(
+        tasks: List<DailyTask>,
+        allCompletions: List<TaskCompletion>
+    ): List<String> {
+        if (tasks.isEmpty() || allCompletions.isEmpty()) return emptyList()
+
+        val completionsByDate = allCompletions.groupBy { it.dateKey }
+        val completionsByTask = allCompletions.groupBy { it.taskId }
+        val fullyCompletedDates = mutableSetOf<String>()
+
+        val todayKey = DateUtils.getTodayKey()
+        val earliestCompDate = allCompletions.map { it.dateKey }.minOrNull() ?: todayKey
+        val earliestTaskDate = tasks.map { DateUtils.getDateKeyFromMillis(it.createdAt) }.minOrNull() ?: todayKey
+        val startDate = minOf(earliestCompDate, earliestTaskDate)
+
+        var checkDate = startDate
+        while (checkDate <= todayKey) {
+            val dayCompletions = completionsByDate[checkDate] ?: emptyList()
+            val dayCompMap = dayCompletions.associateBy { it.taskId }
+            val weekDays = DateUtils.getDaysInSameWeek(checkDate)
+            val weekCompletions = allCompletions.filter { weekDays.contains(it.dateKey) }
+            val weekCompletionsByTask = weekCompletions.groupBy { it.taskId }
+
+            val relevantTasks = tasks.filter { task ->
+                DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, checkDate) || dayCompMap.containsKey(task.id)
+            }
+
+            if (relevantTasks.isNotEmpty()) {
+                val mandatoryTasks = relevantTasks.filter { task ->
+                    val compToday = dayCompMap[task.id]
+                    val isDoneToday = if (task.isCounter) (compToday?.count ?: 0) >= task.targetCount else compToday != null
+                    val weekList = weekCompletionsByTask[task.id] ?: emptyList()
+                    val weeklyCompletedCount = weekList.count { comp ->
+                        if (task.isCounter) comp.count >= task.targetCount else comp.count > 0
+                    }
+                    val allTaskComps = completionsByTask[task.id] ?: emptyList()
+                    val lastCompBeforeDate = allTaskComps
+                        .filter { it.dateKey < checkDate && (if (task.isCounter) it.count >= task.targetCount else it.count > 0) }
+                        .maxOfOrNull { it.dateKey }
+
+                    DateUtils.isTaskMandatoryOnDate(
+                        frequencyType = task.frequencyType,
+                        daysOfWeek = task.daysOfWeek,
+                        targetDaysPerWeek = task.targetDaysPerWeek,
+                        intervalDays = task.intervalDays,
+                        intervalAnchorDate = task.intervalAnchorDate,
+                        lastCompletionDateKey = lastCompBeforeDate,
+                        dateKey = checkDate,
+                        weeklyCompletedCount = weeklyCompletedCount,
+                        isCompletedOnDate = isDoneToday,
+                        createdAtMillis = task.createdAt
+                    )
+                }
+
+                val hasAnyCompletion = relevantTasks.any { task ->
+                    val comp = dayCompMap[task.id]
+                    if (task.isCounter) (comp?.count ?: 0) >= task.targetCount else comp != null
+                }
+
+                if (mandatoryTasks.isNotEmpty()) {
+                    val allMandatoryDone = mandatoryTasks.all { task ->
+                        val comp = dayCompMap[task.id]
+                        if (task.isCounter) (comp?.count ?: 0) >= task.targetCount
+                        else comp != null
+                    }
+                    if (allMandatoryDone) {
+                        fullyCompletedDates.add(checkDate)
+                    }
+                } else {
+                    if (hasAnyCompletion) {
+                        fullyCompletedDates.add(checkDate)
+                    } else {
+                        // Rest day: check if weekly tasks are satisfied if it's a past week
+                        val isPastWeek = !weekDays.contains(todayKey)
+                        val weeklyTasks = relevantTasks.filter { it.frequencyType == "WEEKLY" }
+                        val weeklyGoalsSatisfied = if (isPastWeek && weeklyTasks.isNotEmpty()) {
+                            weeklyTasks.all { task ->
+                                val weekList = weekCompletionsByTask[task.id] ?: emptyList()
+                                val count = weekList.count { if (task.isCounter) it.count >= task.targetCount else it.count > 0 }
+                                val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, checkDate)
+                                count >= effectiveTarget
+                            }
+                        } else {
+                            true
+                        }
+                        if (weeklyGoalsSatisfied) {
+                            fullyCompletedDates.add(checkDate)
+                        }
+                    }
+                }
+            }
+            checkDate = DateUtils.addDays(checkDate, 1)
+        }
+
+        return fullyCompletedDates.sortedDescending()
+    }
+
+    companion object {
+        @Volatile
+        private var instance: DailyRepository? = null
+
+        fun setInstance(repo: DailyRepository) {
+            instance = repo
+        }
+
+        fun getInstance(context: Context): DailyRepository {
+            return instance ?: synchronized(this) {
+                instance ?: run {
+                    val app = context.applicationContext as? com.example.DailyApplication
+                    val repo = app?.repository ?: run {
+                        val db = DailyDatabase.getInstance(context)
+                        DailyRepository(db.dailyTaskDao(), context.applicationContext)
+                    }
+                    instance = repo
+                    repo
+                }
+            }
+        }
+    }
 }

@@ -584,4 +584,26 @@ class ExampleRobolectricTest {
         assertTrue("Monday streak should be secured!", fullyDone.contains(mon))
         assertTrue("Tuesday streak should be secured!", fullyDone.contains(tue))
     }
+
+    @Test
+    fun testDailyDatabaseDiskOpenAndValidation() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        // Verify getInstance opens database cleanly without throwing IllegalStateException
+        val diskDb = DailyDatabase.getInstance(context)
+        assertNotNull(diskDb)
+        val dao = diskDb.dailyTaskDao()
+        assertNotNull(dao)
+
+        val id = dao.insertTask(
+            DailyTask(
+                title = "Test Habit Disk",
+                category = "Supplements",
+                orderIndex = 1
+            )
+        )
+        assertTrue(id > 0)
+        val loaded = dao.getTaskById(id)
+        assertNotNull(loaded)
+        assertEquals("Test Habit Disk", loaded?.title)
+    }
 }

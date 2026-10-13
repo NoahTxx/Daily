@@ -22,8 +22,12 @@ class DailyApplication : Application() {
 
         // Seed defaults if app opened for the first time
         CoroutineScope(Dispatchers.IO).launch {
-            repository.seedDefaultsIfEmpty()
-            ReminderManager.rescheduleAllReminders(this@DailyApplication)
+            try {
+                repository.seedDefaultsIfEmpty()
+                ReminderManager.rescheduleAllReminders(this@DailyApplication)
+            } catch (e: Exception) {
+                android.util.Log.e("DailyApplication", "Failed to seed defaults or schedule reminders", e)
+            }
         }
     }
 }
