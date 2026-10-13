@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [DailyTask::class, TaskCompletion::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class DailyDatabase : RoomDatabase() {
@@ -35,6 +35,20 @@ abstract class DailyDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_isArchived_orderIndex ON daily_tasks (isArchived, orderIndex, id)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_reminderEnabled ON daily_tasks (isArchived, reminderEnabled)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_task_completions_taskId_dateKey ON task_completions (taskId, dateKey)"
+                )
+            }
+        }
+
         fun getInstance(context: Context): DailyDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -42,7 +56,7 @@ abstract class DailyDatabase : RoomDatabase() {
                     DailyDatabase::class.java,
                     "daily_habits.db"
                 )
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
