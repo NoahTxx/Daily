@@ -121,15 +121,22 @@ fun TodayScreen(
         showPermissionCard = !isGranted
     }
 
-    val dueTasks = remember(tasks) {
-        tasks.filter { it.isDueToday && !it.isCompleted && !(it.task.frequencyType == "WEEKLY" && it.isWeeklyGoalMet) }
-    }
-    val openDueTasks = dueTasks
-    val completedTasks = remember(tasks) {
-        tasks.filter { it.isCompleted || (it.task.frequencyType == "WEEKLY" && it.isWeeklyGoalMet) }
-    }
-    val notDueTasks = remember(tasks) {
-        tasks.filter { !it.isDueToday && !it.isCompleted && !(it.task.frequencyType == "WEEKLY" && it.isWeeklyGoalMet) }
+    val (openDueTasks, completedTasks, notDueTasks) = remember(tasks) {
+        val open = mutableListOf<TaskWithCompletion>()
+        val completed = mutableListOf<TaskWithCompletion>()
+        val notDue = mutableListOf<TaskWithCompletion>()
+
+        for (task in tasks) {
+            val isDone = task.isCompleted || (task.task.frequencyType == "WEEKLY" && task.isWeeklyGoalMet)
+            if (isDone) {
+                completed.add(task)
+            } else if (task.isDueToday) {
+                open.add(task)
+            } else {
+                notDue.add(task)
+            }
+        }
+        Triple(open, completed, notDue)
     }
 
     val completedCount = remember(tasks) {
