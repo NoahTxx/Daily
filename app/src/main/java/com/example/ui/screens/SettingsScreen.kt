@@ -62,6 +62,7 @@ import com.example.reminder.ReminderManager
 import com.example.ui.components.CompletionCelebrationEffect
 import com.example.ui.components.NothingCard
 import com.example.ui.components.NothingHeader
+import com.example.ui.theme.CourierPrimeFontFamily
 import com.example.ui.theme.GeistFontFamily
 import com.example.ui.theme.GeistMonoFontFamily
 import com.example.ui.theme.NDotFontFamily
@@ -611,12 +612,14 @@ fun SettingsScreen(
                         HeadingFont.entries.forEach { fontOption ->
                             val isSelected = fontOption == selectedHeadingFont
                             val previewFont = when (fontOption) {
+                                HeadingFont.COURIER -> CourierPrimeFontFamily
                                 HeadingFont.NDOT -> NDotFontFamily
                                 HeadingFont.GEIST -> GeistMonoFontFamily
                                 HeadingFont.SILKSCREEN -> SilkscreenFontFamily
                                 HeadingFont.SANS -> FontFamily.SansSerif
                             }
                             val sample = when (fontOption) {
+                                HeadingFont.COURIER -> "DAILY 24"
                                 HeadingFont.NDOT -> "DAILY 24"
                                 HeadingFont.GEIST -> "DAILY 24"
                                 HeadingFont.SILKSCREEN -> "DAILY 24"
@@ -713,11 +716,13 @@ fun SettingsScreen(
                             val isSelected = fontOption == selectedBodyFont
                             val previewFont = when (fontOption) {
                                 BodyFont.GEIST -> GeistFontFamily
+                                BodyFont.COURIER -> CourierPrimeFontFamily
                                 BodyFont.MONO -> GeistMonoFontFamily
                                 BodyFont.SANS -> FontFamily.SansSerif
                             }
                             val sample = when (fontOption) {
                                 BodyFont.GEIST -> "Geist Sans 123"
+                                BodyFont.COURIER -> "Courier 123"
                                 BodyFont.MONO -> "Geist Mono 123"
                                 BodyFont.SANS -> "System Sans 123"
                             }

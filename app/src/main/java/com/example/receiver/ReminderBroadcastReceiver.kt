@@ -19,32 +19,15 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = DailyDatabase.getInstance(context)
-                val task = db.dailyTaskDao().getTaskById(taskId)
+                val repository = com.example.data.DailyRepository.getInstance(context)
+                val task = repository.getTaskByIdSync(taskId)
                 if (task != null && !task.isArchived && task.reminderEnabled) {
                     val todayKey = DateUtils.getTodayKey()
-                    var shouldNotify = true
+                    val tasksWithCompletion = repository.getTasksWithCompletionsSync(todayKey)
+                    val taskStatus = tasksWithCompletion.firstOrNull { it.task.id == taskId }
 
-                    if (task.frequencyType == "WEEKDAYS") {
-                        val isoDay = DateUtils.getIsoDayOfWeek(todayKey)
-                        val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-                        if (!allowed.contains(isoDay)) {
-                            shouldNotify = false
-                        }
-                    } else if (task.frequencyType == "WEEKLY") {
-                        val weekDays = DateUtils.getDaysInSameWeek(todayKey)
-                        val weekCompletions = db.dailyTaskDao().getCompletionsForDateKeysSync(weekDays)
-                        val completedCount = weekCompletions.count { it.taskId == task.id && (if (task.isCounter) it.count >= task.targetCount else it.count > 0) }
-                        if (completedCount >= task.targetDaysPerWeek) {
-                            shouldNotify = false
-                        }
-                    }
-
-                    val completion = db.dailyTaskDao().getCompletion(taskId, todayKey)
-                    val isDoneToday = if (task.isCounter) (completion?.count ?: 0) >= task.targetCount else completion != null
-                    if (isDoneToday) {
-                        shouldNotify = false
-                    }
+                    // Only notify if the task is due today and not completed yet
+                    val shouldNotify = taskStatus != null && taskStatus.isDueToday && !taskStatus.isCompleted
 
                     if (shouldNotify) {
                         ReminderManager.showReminderNotification(context, task)

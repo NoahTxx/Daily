@@ -52,6 +52,7 @@ import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StatsScreen
 import com.example.ui.screens.TaskEditDialog
 import com.example.ui.screens.TodayScreen
+import com.example.ui.theme.CourierPrimeFontFamily
 import com.example.ui.theme.GeistFontFamily
 import com.example.ui.theme.GeistMonoFontFamily
 import com.example.ui.theme.MyApplicationTheme
@@ -91,6 +92,7 @@ class MainActivity : ComponentActivity() {
 
             val headingFontFamily = remember(selectedHeadingFont) {
                 when (selectedHeadingFont) {
+                    HeadingFont.COURIER -> CourierPrimeFontFamily
                     HeadingFont.NDOT -> NDotFontFamily
                     HeadingFont.GEIST -> GeistMonoFontFamily
                     HeadingFont.SILKSCREEN -> SilkscreenFontFamily
@@ -100,6 +102,7 @@ class MainActivity : ComponentActivity() {
             val bodyFontFamily = remember(selectedBodyFont) {
                 when (selectedBodyFont) {
                     BodyFont.GEIST -> GeistFontFamily
+                    BodyFont.COURIER -> CourierPrimeFontFamily
                     BodyFont.MONO -> GeistMonoFontFamily
                     BodyFont.SANS -> FontFamily.SansSerif
                 }

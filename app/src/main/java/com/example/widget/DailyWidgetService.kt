@@ -35,55 +35,11 @@ class DailyRemoteViewsFactory(
 
     private fun loadData() {
         try {
-            val db = DailyDatabase.getInstance(context)
-            val tasks = db.dailyTaskDao().getAllActiveTasksSync()
+            val repository = com.example.data.DailyRepository.getInstance(context)
             val todayKey = DateUtils.getTodayKey()
-            val completions = db.dailyTaskDao().getCompletionsForDateSync(todayKey)
-            val weekDays = DateUtils.getDaysInSameWeek(todayKey)
-            val weekCompletions = db.dailyTaskDao().getCompletionsForDateKeysSync(weekDays)
-            val isoDay = DateUtils.getIsoDayOfWeek(todayKey)
-
-            val completedMap = completions.associateBy { it.taskId }
-            val completionsByTaskThisWeek = weekCompletions.groupBy { it.taskId }
-
-            items = tasks.mapNotNull { task ->
-                val completion = completedMap[task.id]
-                val currentCount = completion?.count ?: 0
-                val isDone = if (task.isCounter) currentCount >= task.targetCount else completion != null
-
-                val weekList = completionsByTaskThisWeek[task.id] ?: emptyList()
-                val weeklyCompletedCount = weekList.count { comp ->
-                    if (task.isCounter) comp.count >= task.targetCount else comp.count > 0
-                }
-                val isWeeklyGoalMet = when (task.frequencyType) {
-                    "WEEKLY" -> weeklyCompletedCount >= task.targetDaysPerWeek
-                    else -> isDone
-                }
-
-                val isDueToday = when (task.frequencyType) {
-                    "WEEKDAYS" -> {
-                        val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-                        allowed.contains(isoDay)
-                    }
-                    "WEEKLY" -> !isWeeklyGoalMet || isDone
-                    else -> true
-                }
-
-                // If not due today, do not show in tasks widget
-                if (!isDueToday) {
-                    null
-                } else {
-                    TaskWithCompletion(
-                        task = task,
-                        isCompleted = isDone,
-                        count = currentCount,
-                        completedAt = completion?.completedAt,
-                        weeklyCompletedCount = weeklyCompletedCount,
-                        isDueToday = isDueToday,
-                        isWeeklyGoalMet = isWeeklyGoalMet
-                    )
-                }
-            }
+            val allTasksWithStatus = repository.getTasksWithCompletionsSync(todayKey)
+            // Only show tasks that are due today or already completed today
+            items = allTasksWithStatus.filter { it.isDueToday || it.isCompleted }
         } catch (e: Exception) {
             e.printStackTrace()
             items = emptyList()

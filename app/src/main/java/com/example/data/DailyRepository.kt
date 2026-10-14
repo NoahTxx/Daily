@@ -24,89 +24,42 @@ class DailyRepository(
             dao.getAllCompletionsFlow()
         ) { tasks, todayCompletions, weekCompletions, allCompletions ->
             val completedMapToday = todayCompletions.associateBy { it.taskId }
-            val completionsByTaskThisWeek = weekCompletions.groupBy { it.taskId }
-            val completionsByTask = allCompletions.groupBy { it.taskId }
-
-            // Only show tasks that existed on or before dateKey, or have an existing completion for that date
             val relevantTasks = tasks.filter { task ->
                 DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, dateKey) || completedMapToday.containsKey(task.id)
             }
 
             relevantTasks.map { task ->
-                val completionToday = completedMapToday[task.id]
-                val currentCount = completionToday?.count ?: 0
-                val isDoneToday = if (task.isCounter) currentCount >= task.targetCount else completionToday != null
-
-                val weekList = completionsByTaskThisWeek[task.id] ?: emptyList()
-                val weeklyCompletedCount = weekList.count { comp ->
-                    if (task.isCounter) comp.count >= task.targetCount else comp.count > 0
-                }
-                val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, dateKey)
-                val isWeeklyGoalMet = when (task.frequencyType) {
-                    "WEEKLY" -> weeklyCompletedCount >= effectiveTarget
-                    else -> isDoneToday
-                }
-
-                val allTaskComps = completionsByTask[task.id] ?: emptyList()
-                val lastCompBeforeDate = allTaskComps
-                    .filter { it.dateKey < dateKey && (if (task.isCounter) it.count >= task.targetCount else it.count > 0) }
-                    .maxOfOrNull { it.dateKey }
-
-                val isDueToday: Boolean
-                val isMandatoryToday: Boolean
-                val daysUntilDue: Int
-
-                when (task.frequencyType) {
-                    "WEEKDAYS" -> {
-                        val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-                        isDueToday = allowed.contains(isoDay)
-                        isMandatoryToday = isDueToday
-                        daysUntilDue = 0
-                    }
-                    "WEEKLY" -> {
-                        val remainingDays = DateUtils.getRemainingDaysInWeek(dateKey)
-                        val needed = effectiveTarget - weeklyCompletedCount
-                        isMandatoryToday = !isWeeklyGoalMet && needed > 0 && remainingDays <= needed
-                        isDueToday = isMandatoryToday || isDoneToday
-                        daysUntilDue = 0
-                    }
-                    "INTERVAL" -> {
-                        val intervalDue = DateUtils.isIntervalTaskDue(
-                            intervalDays = task.intervalDays,
-                            anchorDateKey = task.intervalAnchorDate,
-                            lastCompletionDateKey = lastCompBeforeDate,
-                            queryDateKey = dateKey
-                        )
-                        isDueToday = intervalDue || isDoneToday
-                        isMandatoryToday = intervalDue
-                        daysUntilDue = DateUtils.getDaysUntilIntervalDue(
-                            intervalDays = task.intervalDays,
-                            anchorDateKey = task.intervalAnchorDate,
-                            lastCompletionDateKey = lastCompBeforeDate,
-                            queryDateKey = dateKey
-                        )
-                    }
-                    else -> {
-                        // DAILY
-                        isDueToday = true
-                        isMandatoryToday = true
-                        daysUntilDue = 0
-                    }
-                }
-
-                TaskWithCompletion(
+                TaskStatusCalculator.evaluate(
                     task = task,
-                    isCompleted = isDoneToday,
-                    count = currentCount,
-                    completedAt = completionToday?.completedAt,
-                    weeklyCompletedCount = weeklyCompletedCount,
-                    isDueToday = isDueToday,
-                    isWeeklyGoalMet = isWeeklyGoalMet,
-                    isMandatoryToday = isMandatoryToday,
-                    daysUntilDue = daysUntilDue,
-                    lastCompletionDateKey = lastCompBeforeDate
+                    dateKey = dateKey,
+                    todayCompletions = todayCompletions,
+                    weekCompletions = weekCompletions,
+                    allCompletions = allCompletions
                 )
             }
+        }
+    }
+
+    fun getTasksWithCompletionsSync(dateKey: String): List<TaskWithCompletion> {
+        val weekDays = DateUtils.getDaysInSameWeek(dateKey)
+        val tasks = dao.getAllActiveTasksSync()
+        val todayCompletions = dao.getCompletionsForDateSync(dateKey)
+        val weekCompletions = dao.getCompletionsForDateKeysSync(weekDays)
+        val allCompletions = dao.getAllCompletionsSync()
+
+        val completedMapToday = todayCompletions.associateBy { it.taskId }
+        val relevantTasks = tasks.filter { task ->
+            DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, dateKey) || completedMapToday.containsKey(task.id)
+        }
+
+        return relevantTasks.map { task ->
+            TaskStatusCalculator.evaluate(
+                task = task,
+                dateKey = dateKey,
+                todayCompletions = todayCompletions,
+                weekCompletions = weekCompletions,
+                allCompletions = allCompletions
+            )
         }
     }
 
@@ -129,6 +82,18 @@ class DailyRepository(
             val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
             if (!allowed.contains(isoDay)) {
                 // Not due on this day: cannot check off. If previously completed, allow unchecking.
+                if (existing != null) {
+                    dao.deleteCompletion(taskId, dateKey)
+                    DailyWidgetProvider.notifyDataChanged(context)
+                }
+                return@withContext false
+            }
+        } else if (task?.frequencyType == "INTERVAL") {
+            val allCompletions = dao.getAllCompletionsSync()
+            val lastComp = allCompletions.filter { it.taskId == taskId && (if (task.isCounter) it.count >= task.targetCount else it.count > 0) && it.dateKey < dateKey }
+                .maxOfOrNull { it.dateKey } ?: task.intervalAnchorDate.ifBlank { null }
+            val isDue = DateUtils.isIntervalTaskDue(task.intervalDays, task.intervalAnchorDate, lastComp, dateKey)
+            if (!isDue) {
                 if (existing != null) {
                     dao.deleteCompletion(taskId, dateKey)
                     DailyWidgetProvider.notifyDataChanged(context)
@@ -181,6 +146,21 @@ class DailyRepository(
             val isoDay = DateUtils.getIsoDayOfWeek(dateKey)
             val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
             if (!allowed.contains(isoDay)) {
+                if (amount < 0 && current > 0) {
+                    val newCount = (current + amount).coerceAtLeast(0)
+                    if (newCount == 0) dao.deleteCompletion(taskId, dateKey)
+                    else dao.insertCompletion(TaskCompletion(id = existing?.id ?: 0, taskId = taskId, dateKey = dateKey, count = newCount))
+                    DailyWidgetProvider.notifyDataChanged(context)
+                    return@withContext newCount
+                }
+                return@withContext current
+            }
+        } else if (task.frequencyType == "INTERVAL") {
+            val allCompletions = dao.getAllCompletionsSync()
+            val lastComp = allCompletions.filter { it.taskId == taskId && (if (task.isCounter) it.count >= task.targetCount else it.count > 0) && it.dateKey < dateKey }
+                .maxOfOrNull { it.dateKey } ?: task.intervalAnchorDate.ifBlank { null }
+            val isDue = DateUtils.isIntervalTaskDue(task.intervalDays, task.intervalAnchorDate, lastComp, dateKey)
+            if (!isDue) {
                 if (amount < 0 && current > 0) {
                     val newCount = (current + amount).coerceAtLeast(0)
                     if (newCount == 0) dao.deleteCompletion(taskId, dateKey)

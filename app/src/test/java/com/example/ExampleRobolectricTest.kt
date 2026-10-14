@@ -1,6 +1,13 @@
-package com.example.data
+package com.example
 
 import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.example.DailyApplication
+import com.example.R
+import com.example.data.DailyDatabase
+import com.example.data.DailyTask
+import com.example.data.TaskCompletion
 import com.example.util.DateUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking

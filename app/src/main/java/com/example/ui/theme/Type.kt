@@ -36,11 +36,16 @@ val DotGothicFontFamily = FontFamily(
     Font(R.font.dotgothic16, FontWeight.Normal)
 )
 
+val CourierPrimeFontFamily = FontFamily(
+    Font(R.font.courier_prime, FontWeight.Normal),
+    Font(R.font.courier_prime, FontWeight.Bold)
+)
+
 // Alias for compatibility
 val DotMatrixFontFamily = NDotFontFamily
 
 fun createAppTypography(
-    headingFont: FontFamily = NDotFontFamily,
+    headingFont: FontFamily = CourierPrimeFontFamily,
     bodyFont: FontFamily = GeistFontFamily
 ): Typography {
     return Typography(

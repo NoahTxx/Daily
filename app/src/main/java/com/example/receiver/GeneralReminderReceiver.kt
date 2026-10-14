@@ -40,43 +40,15 @@ class GeneralReminderReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = DailyDatabase.getInstance(context)
+                val repository = com.example.data.DailyRepository.getInstance(context)
                 val todayKey = DateUtils.getTodayKey()
-                val tasks = db.dailyTaskDao().getAllActiveTasksSync()
-                val completions = db.dailyTaskDao().getCompletionsForDateSync(todayKey)
-                val weekDays = DateUtils.getDaysInSameWeek(todayKey)
-                val weekCompletions = db.dailyTaskDao().getCompletionsForDateKeysSync(weekDays)
-                val isoDay = DateUtils.getIsoDayOfWeek(todayKey)
-
-                val completedIdsToday = completions.filter { comp ->
-                    val task = tasks.find { it.id == comp.taskId }
-                    if (task?.isCounter == true) {
-                        comp.count >= task.targetCount
-                    } else {
-                        true
-                    }
-                }.map { it.taskId }.toSet()
-
-                val dueTasks = tasks.filter { task ->
-                    when (task.frequencyType) {
-                        "WEEKDAYS" -> {
-                            val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-                            allowed.contains(isoDay)
-                        }
-                        "WEEKLY" -> {
-                            val completedCount = weekCompletions.count {
-                                it.taskId == task.id && (if (task.isCounter) it.count >= task.targetCount else it.count > 0)
-                            }
-                            completedCount < task.targetDaysPerWeek
-                        }
-                        else -> true
-                    }
-                }
-
-                val incompleteCount = dueTasks.count { !completedIdsToday.contains(it.id) }
+                val tasks = repository.getTasksWithCompletionsSync(todayKey)
+                val dueOrCompletedTasks = tasks.filter { it.isDueToday || it.isCompleted }
+                val totalDue = dueOrCompletedTasks.size
+                val incompleteCount = dueOrCompletedTasks.count { !it.isCompleted }
 
                 if (incompleteCount > 0) {
-                    ReminderManager.showGeneralReminderNotification(context, incompleteCount, dueTasks.size)
+                    ReminderManager.showGeneralReminderNotification(context, incompleteCount, totalDue)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

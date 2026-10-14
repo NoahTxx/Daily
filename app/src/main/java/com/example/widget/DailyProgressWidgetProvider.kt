@@ -31,11 +31,10 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
 
             if (appWidgetIds.isNotEmpty()) {
-                val intent = Intent(context, DailyProgressWidgetProvider::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds)
+                val provider = DailyProgressWidgetProvider()
+                for (id in appWidgetIds) {
+                    provider.updateProgressWidget(context, appWidgetManager, id)
                 }
-                context.sendBroadcast(intent)
             }
         }
     }
@@ -71,55 +70,16 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         val language = appSettings.selectedLanguage.value
         val isEn = language == AppLanguage.EN
 
-        // Initial placeholder render
-        val initialViews = createResponsiveViews(
-            context = context,
-            appWidgetManager = appWidgetManager,
-            appWidgetId = appWidgetId,
-            done = 0,
-            total = 0,
-            percent = 0,
-            accentColor = accentColor,
-            isEn = isEn
-        )
-        appWidgetManager.updateAppWidget(appWidgetId, initialViews)
-
         // Load data in background and update
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = DailyDatabase.getInstance(context)
+                val repository = com.example.data.DailyRepository.getInstance(context)
                 val todayKey = DateUtils.getTodayKey()
-                val tasks = db.dailyTaskDao().getAllActiveTasksSync()
-                val completions = db.dailyTaskDao().getCompletionsForDateSync(todayKey)
-                val weekDays = DateUtils.getDaysInSameWeek(todayKey)
-                val weekCompletions = db.dailyTaskDao().getCompletionsForDateKeysSync(weekDays)
+                val tasks = repository.getTasksWithCompletionsSync(todayKey)
+                val dueOrCompletedTasks = tasks.filter { it.isDueToday || it.isCompleted }
 
-                val compMap = completions.associateBy { it.taskId }
-                val completionsByTaskThisWeek = weekCompletions.groupBy { it.taskId }
-
-                val dueTasks = tasks.filter { task ->
-                    val comp = compMap[task.id]
-                    val isDone = if (task.isCounter) (comp?.count ?: 0) >= task.targetCount else comp != null
-                    val weekList = completionsByTaskThisWeek[task.id] ?: emptyList()
-                    val weeklyCompletedCount = weekList.count { compItem ->
-                        if (task.isCounter) compItem.count >= task.targetCount else compItem.count > 0
-                    }
-                    DateUtils.isTaskDueOnDate(
-                        frequencyType = task.frequencyType,
-                        daysOfWeek = task.daysOfWeek,
-                        targetDaysPerWeek = task.targetDaysPerWeek,
-                        dateKey = todayKey,
-                        weeklyCompletedCount = weeklyCompletedCount,
-                        isCompletedOnDate = isDone
-                    )
-                }
-
-                val total = dueTasks.size
-                val done = dueTasks.count { task ->
-                    val comp = compMap[task.id]
-                    if (task.isCounter) (comp?.count ?: 0) >= task.targetCount
-                    else comp != null
-                }
+                val total = dueOrCompletedTasks.size
+                val done = dueOrCompletedTasks.count { it.isCompleted }
                 val percent = if (total > 0) ((done.toFloat() / total.toFloat()) * 100f).toInt() else 0
 
                 val updatedViews = createResponsiveViews(
