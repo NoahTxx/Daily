@@ -228,33 +228,26 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         if (completionDates.isEmpty()) return StreakStats()
 
         val dateSet = completionDates.toSet()
-        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val todayKey = DateUtils.getTodayKey()
         val isTodaySecured = dateSet.contains(todayKey)
 
         // 1. Current streak calculation
-        val cal = Calendar.getInstance()
-        var checkKey = format.format(cal.time)
+        var checkKey = todayKey
         var currentStreak = 0
 
         if (!dateSet.contains(checkKey)) {
             // Check yesterday
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-            checkKey = format.format(cal.time)
-            if (!dateSet.contains(checkKey)) {
-                currentStreak = 0
-            } else {
+            checkKey = DateUtils.addDays(checkKey, -1)
+            if (dateSet.contains(checkKey)) {
                 while (dateSet.contains(checkKey)) {
                     currentStreak++
-                    cal.add(Calendar.DAY_OF_YEAR, -1)
-                    checkKey = format.format(cal.time)
+                    checkKey = DateUtils.addDays(checkKey, -1)
                 }
             }
         } else {
             while (dateSet.contains(checkKey)) {
                 currentStreak++
-                cal.add(Calendar.DAY_OF_YEAR, -1)
-                checkKey = format.format(cal.time)
+                checkKey = DateUtils.addDays(checkKey, -1)
             }
         }
 
@@ -262,17 +255,13 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         val sortedDates = completionDates.distinct().sorted()
         var longestStreak = 0
         var tempStreak = 0
-        var prevCal: Calendar? = null
+        var prevDateStr: String? = null
 
         for (dStr in sortedDates) {
-            val currentD = Calendar.getInstance().apply {
-                time = format.parse(dStr) ?: return@apply
-            }
-
-            if (prevCal == null) {
+            if (prevDateStr == null) {
                 tempStreak = 1
             } else {
-                val diffDays = ((currentD.timeInMillis - prevCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
+                val diffDays = DateUtils.daysBetween(prevDateStr, dStr)
                 if (diffDays == 1) {
                     tempStreak++
                 } else if (diffDays > 1) {
@@ -282,7 +271,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
             if (tempStreak > longestStreak) {
                 longestStreak = tempStreak
             }
-            prevCal = currentD
+            prevDateStr = dStr
         }
 
         if (currentStreak > longestStreak) {
@@ -352,9 +341,8 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val lastCompBeforeToday = validCompletions
-                .map { it.dateKey }
-                .filter { it < todayKey }
-                .maxOrNull()
+                .filter { it.dateKey < todayKey }
+                .maxOfOrNull { it.dateKey }
 
             val currentWeekDays = DateUtils.getDaysInSameWeek(todayKey)
             val weeklyCompletedCountThisWeek = validCompletions.count { currentWeekDays.contains(it.dateKey) }
@@ -454,13 +442,12 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Current streak on scheduled weekdays
                 var curStreak = 0
-                val checkCal = Calendar.getInstance()
+                var checkKey = todayKey
                 for (i in 0..365) {
-                    val key = format.format(checkCal.time)
-                    val isoDay = DateUtils.getIsoDayOfWeek(key)
+                    val isoDay = DateUtils.getIsoDayOfWeek(checkKey)
                     if (allowedDays.contains(isoDay)) {
-                        val isDone = completedDates.contains(key)
-                        if (key == todayKey && !isDone) {
+                        val isDone = completedDates.contains(checkKey)
+                        if (checkKey == todayKey && !isDone) {
                             // Today is due but not done yet, continue looking backwards
                         } else if (isDone) {
                             curStreak++
@@ -468,30 +455,26 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                             break
                         }
                     }
-                    checkCal.add(Calendar.DAY_OF_YEAR, -1)
+                    checkKey = DateUtils.addDays(checkKey, -1)
                 }
 
                 // Longest streak on scheduled weekdays
                 val sorted = completedDates.sorted()
                 var longest = 0
                 if (sorted.isNotEmpty()) {
-                    val startCal = Calendar.getInstance().apply {
-                        time = format.parse(sorted.first()) ?: return Pair(curStreak, curStreak)
-                    }
-                    val endCal = Calendar.getInstance()
+                    var startKey = sorted.first()
                     var temp = 0
-                    while (!startCal.after(endCal)) {
-                        val key = format.format(startCal.time)
-                        val isoDay = DateUtils.getIsoDayOfWeek(key)
+                    while (startKey <= todayKey) {
+                        val isoDay = DateUtils.getIsoDayOfWeek(startKey)
                         if (allowedDays.contains(isoDay)) {
-                            if (completedDates.contains(key)) {
+                            if (completedDates.contains(startKey)) {
                                 temp++
                                 if (temp > longest) longest = temp
                             } else {
                                 temp = 0
                             }
                         }
-                        startCal.add(Calendar.DAY_OF_YEAR, 1)
+                        startKey = DateUtils.addDays(startKey, 1)
                     }
                 }
                 return Pair(curStreak, maxOf(longest, curStreak))
@@ -513,53 +496,38 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         completedDates: Set<String>
     ): Pair<Int, Int> {
         if (completedDates.isEmpty()) return Pair(0, 0)
-        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val calForDate = Calendar.getInstance()
         val completionsByWeek = mutableMapOf<String, Int>()
 
         for (dStr in completedDates) {
-            try {
-                calForDate.time = format.parse(dStr) ?: continue
-                val year = calForDate.get(Calendar.YEAR)
-                val week = calForDate.get(Calendar.WEEK_OF_YEAR)
-                val key = "$year-W$week"
-                completionsByWeek[key] = (completionsByWeek[key] ?: 0) + 1
-            } catch (_: Exception) {}
+            val weekKey = DateUtils.getDaysInSameWeek(dStr).first()
+            completionsByWeek[weekKey] = (completionsByWeek[weekKey] ?: 0) + 1
         }
 
         val todayKey = DateUtils.getTodayKey()
-        val cal = Calendar.getInstance()
-        val curYear = cal.get(Calendar.YEAR)
-        val curWeek = cal.get(Calendar.WEEK_OF_YEAR)
-        val curWeekKey = "$curYear-W$curWeek"
+        val curWeekKey = DateUtils.getDaysInSameWeek(todayKey).first()
         val curWeekComps = completionsByWeek[curWeekKey] ?: 0
         val curWeekTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, todayKey)
 
         var currentStreak = 0
-        val checkCal = Calendar.getInstance()
+        var checkKey = curWeekKey
 
         if (curWeekComps >= curWeekTarget) {
             currentStreak = 1
-            checkCal.add(Calendar.WEEK_OF_YEAR, -1)
+            checkKey = DateUtils.addDays(checkKey, -7)
         } else {
-            // Ongoing week doesn't penalize previous streak
-            checkCal.add(Calendar.WEEK_OF_YEAR, -1)
+            checkKey = DateUtils.addDays(checkKey, -7)
         }
 
         while (true) {
-            val y = checkCal.get(Calendar.YEAR)
-            val w = checkCal.get(Calendar.WEEK_OF_YEAR)
-            val weekKey = "$y-W$w"
-            val sampleDate = format.format(checkCal.time)
-            // Stop if checkCal is before task creation
-            if (!DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, sampleDate)) {
+            val createdWeekKey = if (task.createdAt > 0) DateUtils.getDaysInSameWeek(DateUtils.getDateKeyFromMillis(task.createdAt)).first() else "0000-00-00"
+            if (checkKey < createdWeekKey) {
                 break
             }
-            val count = completionsByWeek[weekKey] ?: 0
-            val weekTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, sampleDate)
+            val count = completionsByWeek[checkKey] ?: 0
+            val weekTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, checkKey)
             if (count >= weekTarget) {
                 currentStreak++
-                checkCal.add(Calendar.WEEK_OF_YEAR, -1)
+                checkKey = DateUtils.addDays(checkKey, -7)
             } else {
                 break
             }
@@ -613,27 +581,22 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         completedDates: Set<String>,
         todayKey: String
     ): Pair<Int, Int> {
-        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val cal = Calendar.getInstance()
-        var checkKey = format.format(cal.time)
+        var checkKey = todayKey
         var currentStreak = 0
 
         if (!completedDates.contains(checkKey)) {
             // Check yesterday
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-            checkKey = format.format(cal.time)
+            checkKey = DateUtils.addDays(checkKey, -1)
             if (completedDates.contains(checkKey)) {
                 while (completedDates.contains(checkKey)) {
                     currentStreak++
-                    cal.add(Calendar.DAY_OF_YEAR, -1)
-                    checkKey = format.format(cal.time)
+                    checkKey = DateUtils.addDays(checkKey, -1)
                 }
             }
         } else {
             while (completedDates.contains(checkKey)) {
                 currentStreak++
-                cal.add(Calendar.DAY_OF_YEAR, -1)
-                checkKey = format.format(cal.time)
+                checkKey = DateUtils.addDays(checkKey, -1)
             }
         }
 
@@ -641,16 +604,13 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         val sortedDates = completedDates.distinct().sorted()
         var longestStreak = 0
         var tempStreak = 0
-        var prevCal: Calendar? = null
+        var prevDateStr: String? = null
 
         for (dStr in sortedDates) {
-            val currentD = Calendar.getInstance().apply {
-                time = format.parse(dStr) ?: return@apply
-            }
-            if (prevCal == null) {
+            if (prevDateStr == null) {
                 tempStreak = 1
             } else {
-                val diffDays = ((currentD.timeInMillis - prevCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
+                val diffDays = DateUtils.daysBetween(prevDateStr, dStr)
                 if (diffDays == 1) {
                     tempStreak++
                 } else if (diffDays > 1) {
@@ -660,7 +620,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
             if (tempStreak > longestStreak) {
                 longestStreak = tempStreak
             }
-            prevCal = currentD
+            prevDateStr = dStr
         }
 
         if (currentStreak > longestStreak) {
