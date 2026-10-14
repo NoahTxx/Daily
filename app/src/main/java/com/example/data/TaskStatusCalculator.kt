@@ -26,7 +26,7 @@ object TaskStatusCalculator {
 
         val lastCompletionDateKey = allCompletions
             .asSequence()
-            .filter { it.taskId == task.id && it.dateKey < dateKey }
+            .filter { it.taskId == task.id && it.dateKey < dateKey && isCountSatisfied(task, it.count) }
             .maxByOrNull { it.dateKey }
             ?.dateKey
             ?: task.intervalAnchorDate.ifBlank { null }

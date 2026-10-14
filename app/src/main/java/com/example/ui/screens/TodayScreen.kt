@@ -143,13 +143,16 @@ fun TodayScreen(
         tasks.count { it.isCompleted || (it.task.frequencyType == "WEEKLY" && it.isWeeklyGoalMet) }
     }
     val requiredTodayTasks = remember(tasks) {
-        val mandatory = tasks.filter { it.isMandatoryToday }
-        if (mandatory.isNotEmpty()) {
-            val extraCompleted = tasks.filter { !it.isMandatoryToday && (it.isCompleted || (it.task.frequencyType == "WEEKLY" && it.isWeeklyGoalMet)) }
-            mandatory + extraCompleted
-        } else {
-            tasks.filter { it.isDueToday || it.isCompleted }
+        val mandatory = tasks.filter {
+            it.task.frequencyType == "DAILY" ||
+            it.isMandatoryToday ||
+            (it.isDueToday && !(it.task.frequencyType == "WEEKLY" && it.isWeeklyGoalMet))
         }
+        val extraCompleted = tasks.filter { task ->
+            !mandatory.any { it.task.id == task.task.id } &&
+            (task.isCompleted || (task.task.frequencyType == "WEEKLY" && task.isWeeklyGoalMet))
+        }
+        mandatory + extraCompleted
     }
     val totalCount = remember(requiredTodayTasks) { requiredTodayTasks.size }
     val progressPct = remember(completedCount, totalCount) { if (totalCount > 0) ((completedCount * 100) / totalCount).coerceIn(0, 100) else 0 }
@@ -192,24 +195,58 @@ fun TodayScreen(
         previousCompletedCount = completedCount
     }
 
-    val onToggleTask: (Long) -> Unit = remember(isViewingToday, vibrationEnabled) {
+    val onToggleTask: (Long) -> Unit = remember(isViewingToday, vibrationEnabled, tasks) {
         { taskId ->
             if (!isViewingToday) {
                 Toast.makeText(context, t("past_day_readonly_toast"), Toast.LENGTH_SHORT).show()
             } else {
-                if (vibrationEnabled) HapticUtils.vibrateTick(context)
-                viewModel.toggleTask(taskId)
+                val taskItem = tasks.firstOrNull { it.task.id == taskId }
+                val isItemBlocked = taskItem != null && !taskItem.isCompleted && when (taskItem.task.frequencyType) {
+                    "WEEKDAYS" -> !taskItem.isDueToday
+                    "INTERVAL" -> !taskItem.isDueToday
+                    "WEEKLY" -> taskItem.isWeeklyGoalMet
+                    else -> false
+                }
+                if (isItemBlocked) {
+                    val toastMsg = when (taskItem?.task?.frequencyType) {
+                        "WEEKDAYS" -> String.format(t("not_due_toast"), DateUtils.formatDaysOfWeekShort(taskItem.task.daysOfWeek, language))
+                        "INTERVAL" -> if (language == AppLanguage.EN) "Due in ${taskItem.daysUntilDue} days" else "In ${taskItem.daysUntilDue} Tagen fällig"
+                        "WEEKLY" -> if (language == AppLanguage.EN) "Weekly goal reached (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})" else "Wochenziel erreicht (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})"
+                        else -> t("not_due_cant_check")
+                    }
+                    Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+                } else {
+                    if (vibrationEnabled) HapticUtils.vibrateTick(context)
+                    viewModel.toggleTask(taskId)
+                }
             }
         }
     }
 
-    val onIncrementTask: (Long, Int) -> Unit = remember(isViewingToday, vibrationEnabled) {
+    val onIncrementTask: (Long, Int) -> Unit = remember(isViewingToday, vibrationEnabled, tasks) {
         { taskId, delta ->
             if (!isViewingToday) {
                 Toast.makeText(context, t("past_day_readonly_toast"), Toast.LENGTH_SHORT).show()
             } else {
-                if (vibrationEnabled) HapticUtils.vibrateTick(context)
-                viewModel.incrementCounter(taskId, delta)
+                val taskItem = tasks.firstOrNull { it.task.id == taskId }
+                val isItemBlocked = taskItem != null && !taskItem.isCompleted && when (taskItem.task.frequencyType) {
+                    "WEEKDAYS" -> !taskItem.isDueToday
+                    "INTERVAL" -> !taskItem.isDueToday
+                    "WEEKLY" -> taskItem.isWeeklyGoalMet
+                    else -> false
+                }
+                if (isItemBlocked && delta > 0) {
+                    val toastMsg = when (taskItem?.task?.frequencyType) {
+                        "WEEKDAYS" -> String.format(t("not_due_toast"), DateUtils.formatDaysOfWeekShort(taskItem.task.daysOfWeek, language))
+                        "INTERVAL" -> if (language == AppLanguage.EN) "Due in ${taskItem.daysUntilDue} days" else "In ${taskItem.daysUntilDue} Tagen fällig"
+                        "WEEKLY" -> if (language == AppLanguage.EN) "Weekly goal reached (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})" else "Wochenziel erreicht (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})"
+                        else -> t("not_due_cant_check")
+                    }
+                    Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+                } else {
+                    if (vibrationEnabled) HapticUtils.vibrateTick(context)
+                    viewModel.incrementCounter(taskId, delta)
+                }
             }
         }
     }
@@ -692,9 +729,15 @@ fun TaskRowItem(
     val bodyFont = LocalBodyFontFamily.current
     fun t(key: String): String = AppStrings.get(key, language)
 
-    val isNotDue = !item.isDueToday && !item.isCompleted
-    val isOpenDue = item.isDueToday && !item.isCompleted
     val isDone = item.isCompleted
+    val isNotDue = !isDone && when (item.task.frequencyType) {
+        "WEEKDAYS" -> !item.isDueToday
+        "INTERVAL" -> !item.isDueToday
+        "WEEKLY" -> item.isWeeklyGoalMet
+        else -> false
+    }
+    val isWeeklyOptional = !isDone && item.task.frequencyType == "WEEKLY" && !item.isWeeklyGoalMet && !item.isMandatoryToday
+    val isOpenDue = !isDone && !isNotDue && !isWeeklyOptional
 
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
     val surface = MaterialTheme.colorScheme.surface
@@ -716,24 +759,25 @@ fun TaskRowItem(
         }
     }
 
-    val canBeToggledEarly = (item.task.frequencyType == "WEEKLY" || item.task.frequencyType == "INTERVAL") && !isReadOnly
-
-    val notDueToastMsg = remember(item.task.id, item.task.frequencyType, item.task.daysOfWeek, item.task.targetDaysPerWeek, item.task.intervalDays, item.daysUntilDue, item.weeklyCompletedCount, language) {
+    val notDueToastMsg = remember(item.task.id, item.task.frequencyType, item.task.daysOfWeek, item.task.targetDaysPerWeek, item.task.intervalDays, item.daysUntilDue, item.weeklyCompletedCount, item.isWeeklyGoalMet, language) {
         when (item.task.frequencyType) {
             "WEEKDAYS" -> String.format(t("not_due_toast"), DateUtils.formatDaysOfWeekShort(item.task.daysOfWeek, language))
-            "WEEKLY" -> String.format(t("weekly_goal_met_tag"), item.weeklyCompletedCount, item.task.targetDaysPerWeek)
+            "WEEKLY" -> {
+                if (language == AppLanguage.EN) "Weekly goal reached (${item.weeklyCompletedCount}/${item.task.targetDaysPerWeek}) • Rest day"
+                else "Wochenziel erreicht (${item.weeklyCompletedCount}/${item.task.targetDaysPerWeek}) • Heute Pausentag"
+            }
             "INTERVAL" -> {
-                if (language == AppLanguage.EN) "Due in ${item.daysUntilDue} days (Every ${item.task.intervalDays} days)"
-                else "In ${item.daysUntilDue} Tagen fällig (Alle ${item.task.intervalDays} Tage)"
+                if (language == AppLanguage.EN) "Due in ${item.daysUntilDue} days • Rest day"
+                else "In ${item.daysUntilDue} Tagen fällig • Heute Pausentag"
             }
             else -> t("not_due_cant_check")
         }
     }
 
-    val cardClickAction: (() -> Unit)? = remember(isReadOnly, isNotDue, canBeToggledEarly, item.task.id, item.task.isCounter, notDueToastMsg, onToggle) {
+    val cardClickAction: (() -> Unit)? = remember(isReadOnly, isNotDue, item.task.isCounter, notDueToastMsg, onToggle) {
         when {
             isReadOnly -> null
-            isNotDue && !canBeToggledEarly -> {
+            isNotDue -> {
                 { Toast.makeText(context, notDueToastMsg, Toast.LENGTH_SHORT).show() }
             }
             item.task.isCounter -> null
@@ -752,11 +796,14 @@ fun TaskRowItem(
 
     val categoryText = remember(item.task.category) { item.task.category.uppercase() }
 
-    val frequencyText = remember(item.task.frequencyType, item.task.daysOfWeek, item.task.targetDaysPerWeek, item.task.intervalDays, item.weeklyCompletedCount, item.isWeeklyGoalMet, item.daysUntilDue, item.isDueToday, item.isCompleted, language) {
+    val frequencyText = remember(item.task.frequencyType, item.task.daysOfWeek, item.task.targetDaysPerWeek, item.task.intervalDays, item.weeklyCompletedCount, item.isWeeklyGoalMet, isWeeklyOptional, item.daysUntilDue, item.isDueToday, item.isCompleted, language) {
         when (item.task.frequencyType) {
             "WEEKLY" -> {
                 if (item.isWeeklyGoalMet) {
                     String.format(t("weekly_goal_met_tag"), item.weeklyCompletedCount, item.task.targetDaysPerWeek)
+                } else if (isWeeklyOptional) {
+                    val remainingDays = DateUtils.getRemainingDaysInWeek(DateUtils.getTodayKey())
+                    String.format(t("weekly_optional_hint"), remainingDays)
                 } else {
                     String.format(t("weekly_progress_tag"), item.weeklyCompletedCount, item.task.targetDaysPerWeek)
                 }
@@ -803,8 +850,8 @@ fun TaskRowItem(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Checkbox, Counter Progress Circle, or Calm Rest Day Icon
-                if (isNotDue && !canBeToggledEarly) {
+                // Checkbox, Counter Progress Circle, or Calm Rest Day Icon (Moon)
+                if (isNotDue) {
                     Box(
                         modifier = Modifier
                             .size(28.dp)
@@ -813,13 +860,14 @@ fun TaskRowItem(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), CircleShape)
                             .clickable {
                                 Toast.makeText(context, notDueToastMsg, Toast.LENGTH_SHORT).show()
-                            },
+                            }
+                            .testTag("rest_moon_${item.task.id}"),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Bedtime,
                             contentDescription = t("section_not_due"),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                             modifier = Modifier.size(15.dp)
                         )
                     }
@@ -879,7 +927,7 @@ fun TaskRowItem(
                     Text(
                         text = item.task.title,
                         style = MaterialTheme.typography.bodyLarge.copy(
-                            fontFamily = FontFamily.Default,
+                            fontFamily = bodyFont,
                             fontSize = 16.sp,
                             fontWeight = if (isOpenDue) FontWeight.SemiBold else FontWeight.Normal,
                             textDecoration = if (item.isCompleted) TextDecoration.LineThrough else TextDecoration.None

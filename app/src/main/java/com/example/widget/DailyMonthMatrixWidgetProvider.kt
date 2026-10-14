@@ -78,46 +78,16 @@ class DailyMonthMatrixWidgetProvider : AppWidgetProvider() {
         )
         views.setOnClickPendingIntent(R.id.widget_month_root, openAppPendingIntent)
 
-        // Immediately render initial views with correct accent color
-        appWidgetManager.updateAppWidget(appWidgetId, views)
-
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = DailyDatabase.getInstance(context)
                 val repository = com.example.data.DailyRepository.getInstance(context)
                 val todayKey = DateUtils.getTodayKey()
-                val tasks = db.dailyTaskDao().getAllActiveTasksSync()
-                val completions = db.dailyTaskDao().getCompletionsForDateSync(todayKey)
-                val weekDays = DateUtils.getDaysInSameWeek(todayKey)
-                val weekCompletions = db.dailyTaskDao().getCompletionsForDateKeysSync(weekDays)
+                val tasks = repository.getTasksWithCompletionsSync(todayKey)
+                val dueOrCompleted = tasks.filter { it.isDueToday || it.isCompleted }
                 val fullyCompletedDates = repository.getFullyCompletedDatesSync().toSet()
 
-                val compMap = completions.associateBy { it.taskId }
-                val completionsByTaskThisWeek = weekCompletions.groupBy { it.taskId }
-
-                val dueTasks = tasks.filter { task ->
-                    val comp = compMap[task.id]
-                    val isDone = if (task.isCounter) (comp?.count ?: 0) >= task.targetCount else comp != null
-                    val weekList = completionsByTaskThisWeek[task.id] ?: emptyList()
-                    val weeklyCompletedCount = weekList.count { compItem ->
-                        if (task.isCounter) compItem.count >= task.targetCount else compItem.count > 0
-                    }
-                    DateUtils.isTaskDueOnDate(
-                        frequencyType = task.frequencyType,
-                        daysOfWeek = task.daysOfWeek,
-                        targetDaysPerWeek = task.targetDaysPerWeek,
-                        dateKey = todayKey,
-                        weeklyCompletedCount = weeklyCompletedCount,
-                        isCompletedOnDate = isDone
-                    )
-                }
-
-                val total = dueTasks.size
-                val done = dueTasks.count { task ->
-                    val comp = compMap[task.id]
-                    if (task.isCounter) (comp?.count ?: 0) >= task.targetCount
-                    else comp != null
-                }
+                val total = dueOrCompleted.size
+                val done = dueOrCompleted.count { it.isCompleted }
 
                 val streak = calculateStreak(fullyCompletedDates)
 

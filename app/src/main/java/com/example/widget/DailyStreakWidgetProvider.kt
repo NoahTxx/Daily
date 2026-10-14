@@ -28,11 +28,10 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
 
             if (appWidgetIds.isNotEmpty()) {
-                val intent = Intent(context, DailyStreakWidgetProvider::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds)
+                val provider = DailyStreakWidgetProvider()
+                for (id in appWidgetIds) {
+                    provider.updateStreakWidget(context, appWidgetManager, id)
                 }
-                context.sendBroadcast(intent)
             }
 
             DailyMonthMatrixWidgetProvider.notifyDataChanged(context)
@@ -69,17 +68,6 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
         val accentColor = appSettings.selectedAccent.value.color.toArgb()
         val language = appSettings.selectedLanguage.value
         val isEn = language == AppLanguage.EN
-
-        // Initial placeholder render
-        val initialViews = createResponsiveViews(
-            context = context,
-            appWidgetManager = appWidgetManager,
-            appWidgetId = appWidgetId,
-            streak = 0,
-            accentColor = accentColor,
-            isEn = isEn
-        )
-        appWidgetManager.updateAppWidget(appWidgetId, initialViews)
 
         // Load data in background and update
         CoroutineScope(Dispatchers.IO).launch {

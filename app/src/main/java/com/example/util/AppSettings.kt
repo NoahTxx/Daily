@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import com.example.ui.theme.CourierPrimeFontFamily
 import com.example.ui.theme.GeistFontFamily
 import com.example.ui.theme.GeistMonoFontFamily
 import com.example.ui.theme.NDotFontFamily
@@ -25,6 +26,7 @@ enum class AccentColor(val key: String, val displayName: String, val color: Colo
 }
 
 enum class HeadingFont(val key: String, val displayName: String, val subtitle: String) {
+    COURIER("COURIER", "Courier Prime", "Nothing Typewriter"),
     NDOT("NDOT", "NDot 57", "Dot Matrix"),
     GEIST("GEIST", "Geist Mono", "Monospace"),
     SILKSCREEN("SILKSCREEN", "Silkscreen", "Pixel Matrix"),
@@ -33,6 +35,7 @@ enum class HeadingFont(val key: String, val displayName: String, val subtitle: S
 
 enum class BodyFont(val key: String, val displayName: String, val subtitle: String) {
     GEIST("GEIST", "Geist Sans", "Modern Clean"),
+    COURIER("COURIER", "Courier Prime", "Typewriter"),
     MONO("MONO", "Geist Mono", "Monospace"),
     SANS("SANS", "System Sans", "Clean Sans")
 }
@@ -43,7 +46,7 @@ enum class AppLanguage(val key: String, val displayName: String) {
 }
 
 val LocalAccentColor = compositionLocalOf { Color(0xFFD71921) }
-val LocalHeadingFontFamily = compositionLocalOf { NDotFontFamily }
+val LocalHeadingFontFamily = compositionLocalOf { CourierPrimeFontFamily }
 val LocalBodyFontFamily = compositionLocalOf { GeistFontFamily }
 val LocalAppLanguage = compositionLocalOf { AppLanguage.DE }
 
@@ -83,9 +86,9 @@ class AppSettings private constructor(private val appContext: Context) {
 
     private val _selectedHeadingFont = MutableStateFlow(
         try {
-            HeadingFont.valueOf(prefs.getString(KEY_HEADING_FONT, HeadingFont.NDOT.name) ?: HeadingFont.NDOT.name)
+            HeadingFont.valueOf(prefs.getString(KEY_HEADING_FONT, HeadingFont.COURIER.name) ?: HeadingFont.COURIER.name)
         } catch (e: Exception) {
-            HeadingFont.NDOT
+            HeadingFont.COURIER
         }
     )
     val selectedHeadingFont: StateFlow<HeadingFont> = _selectedHeadingFont.asStateFlow()

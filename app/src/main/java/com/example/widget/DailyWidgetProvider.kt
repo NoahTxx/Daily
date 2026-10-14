@@ -38,11 +38,10 @@ class DailyWidgetProvider : AppWidgetProvider() {
             val componentName = ComponentName(context, DailyWidgetProvider::class.java)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
             if (appWidgetIds.isNotEmpty()) {
-                val intent = Intent(context, DailyWidgetProvider::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds)
+                val provider = DailyWidgetProvider()
+                for (id in appWidgetIds) {
+                    provider.updateAppWidget(context, appWidgetManager, id)
                 }
-                context.sendBroadcast(intent)
                 appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_list)
             }
 
@@ -73,7 +72,6 @@ class DailyWidgetProvider : AppWidgetProvider() {
         val appSettings = AppSettings.getInstance(context)
         val accentColor = appSettings.selectedAccent.value.color.toArgb()
         val language = appSettings.selectedLanguage.value
-        val isEn = language == AppLanguage.EN
 
         // Apply accent color and localized text
         views.setTextColor(R.id.widget_progress_text, accentColor)
@@ -81,10 +79,10 @@ class DailyWidgetProvider : AppWidgetProvider() {
         views.setImageViewBitmap(R.id.widget_header_dot, headerDotBitmap)
         views.setTextViewText(R.id.widget_empty_text, AppStrings.get("widget_no_habits", language))
 
-        // Set adapter intent for ListView with unique URI
+        // Set adapter intent for ListView with stable URI per widget
         val serviceIntent = Intent(context, DailyWidgetService::class.java).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            data = Uri.parse("daily://widget/tasks/$appWidgetId/${System.currentTimeMillis()}")
+            data = Uri.parse("daily://widget/tasks/$appWidgetId")
         }
         views.setRemoteAdapter(R.id.widget_list, serviceIntent)
         views.setEmptyView(R.id.widget_list, R.id.widget_empty_view)
@@ -117,39 +115,13 @@ class DailyWidgetProvider : AppWidgetProvider() {
         // Load count numbers in background and update
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = DailyDatabase.getInstance(context)
+                val repository = com.example.data.DailyRepository.getInstance(context)
                 val todayKey = DateUtils.getTodayKey()
-                val tasks = db.dailyTaskDao().getAllActiveTasksSync()
-                val completions = db.dailyTaskDao().getCompletionsForDateSync(todayKey)
-                val weekDays = DateUtils.getDaysInSameWeek(todayKey)
-                val weekCompletions = db.dailyTaskDao().getCompletionsForDateKeysSync(weekDays)
+                val tasks = repository.getTasksWithCompletionsSync(todayKey)
+                val dueOrCompletedTasks = tasks.filter { it.isDueToday || it.isCompleted }
 
-                val compMap = completions.associateBy { it.taskId }
-                val completionsByTaskThisWeek = weekCompletions.groupBy { it.taskId }
-
-                val dueTasks = tasks.filter { task ->
-                    val comp = compMap[task.id]
-                    val isDone = if (task.isCounter) (comp?.count ?: 0) >= task.targetCount else comp != null
-                    val weekList = completionsByTaskThisWeek[task.id] ?: emptyList()
-                    val weeklyCompletedCount = weekList.count { compItem ->
-                        if (task.isCounter) compItem.count >= task.targetCount else compItem.count > 0
-                    }
-                    DateUtils.isTaskDueOnDate(
-                        frequencyType = task.frequencyType,
-                        daysOfWeek = task.daysOfWeek,
-                        targetDaysPerWeek = task.targetDaysPerWeek,
-                        dateKey = todayKey,
-                        weeklyCompletedCount = weeklyCompletedCount,
-                        isCompletedOnDate = isDone
-                    )
-                }
-
-                val total = dueTasks.size
-                val done = dueTasks.count { task ->
-                    val comp = compMap[task.id]
-                    if (task.isCounter) (comp?.count ?: 0) >= task.targetCount
-                    else comp != null
-                }
+                val total = dueOrCompletedTasks.size
+                val done = dueOrCompletedTasks.count { it.isCompleted }
 
                 views.setTextViewText(R.id.widget_progress_text, "$done / $total")
 
@@ -159,8 +131,6 @@ class DailyWidgetProvider : AppWidgetProvider() {
                 e.printStackTrace()
             }
         }
-
-        appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -175,26 +145,12 @@ class DailyWidgetProvider : AppWidgetProvider() {
                 val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        val db = DailyDatabase.getInstance(context)
                         val todayKey = DateUtils.getTodayKey()
-                        val task = db.dailyTaskDao().getTaskById(taskId)
-                        if (task != null) {
-                            val isoDay = DateUtils.getIsoDayOfWeek(todayKey)
-                            val isDue = when (task.frequencyType) {
-                                "WEEKDAYS" -> {
-                                    val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-                                    allowed.contains(isoDay)
-                                }
-                                else -> true
-                            }
-                            if (isDue) {
-                                val repository = com.example.data.DailyRepository.getInstance(context)
-                                if (actionType == ACTION_TYPE_INCREMENT) {
-                                    repository.incrementTaskCounter(taskId, todayKey, amount)
-                                } else {
-                                    repository.toggleTaskCompletion(taskId, todayKey)
-                                }
-                            }
+                        val repository = com.example.data.DailyRepository.getInstance(context)
+                        if (actionType == ACTION_TYPE_INCREMENT) {
+                            repository.incrementTaskCounter(taskId, todayKey, amount)
+                        } else {
+                            repository.toggleTaskCompletion(taskId, todayKey)
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
