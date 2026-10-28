@@ -6,6 +6,7 @@ import com.example.widget.DailyWidgetProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
 class DailyRepository(
@@ -15,7 +16,6 @@ class DailyRepository(
 
     fun getTasksWithCompletions(dateKey: String): Flow<List<TaskWithCompletion>> {
         val weekDays = DateUtils.getDaysInSameWeek(dateKey)
-        val isoDay = DateUtils.getIsoDayOfWeek(dateKey)
 
         return combine(
             dao.getAllActiveTasksFlow(),
@@ -29,68 +29,7 @@ class DailyRepository(
             }
 
             relevantTasks.map { task ->
-                val completionToday = completedMapToday[task.id]
-                val currentCount = completionToday?.count ?: 0
-                val isDoneToday = if (task.isCounter) currentCount >= task.targetCount else completionToday != null
-
-                val weekList = completionsByTaskThisWeek[task.id] ?: emptyList()
-                val weeklyCompletedCount = weekList.count { comp ->
-                    if (task.isCounter) comp.count >= task.targetCount else comp.count > 0
-                }
-                val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, dateKey)
-                val isWeeklyGoalMet = when (task.frequencyType) {
-                    "WEEKLY" -> weeklyCompletedCount >= effectiveTarget
-                    else -> isDoneToday
-                }
-
-                val allTaskComps = completionsByTask[task.id] ?: emptyList()
-                val lastCompBeforeDate = allTaskComps.filter {
-                    it.dateKey < dateKey && (if (task.isCounter) it.count >= task.targetCount else it.count > 0)
-                }.maxByOrNull { it.dateKey }?.dateKey
-
-                val isDueToday: Boolean
-                val isMandatoryToday: Boolean
-                val daysUntilDue: Int
-
-                when (task.frequencyType) {
-                    "WEEKDAYS" -> {
-                        val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-                        isDueToday = allowed.contains(isoDay)
-                        isMandatoryToday = isDueToday
-                        daysUntilDue = 0
-                    }
-                    "WEEKLY" -> {
-                        val remainingDays = DateUtils.getRemainingDaysInWeek(dateKey)
-                        val needed = effectiveTarget - weeklyCompletedCount
-                        isMandatoryToday = !isWeeklyGoalMet && needed > 0 && remainingDays <= needed
-                        isDueToday = isMandatoryToday || isDoneToday
-                        daysUntilDue = 0
-                    }
-                    "INTERVAL" -> {
-                        val intervalDue = DateUtils.isIntervalTaskDue(
-                            intervalDays = task.intervalDays,
-                            anchorDateKey = task.intervalAnchorDate,
-                            lastCompletionDateKey = lastCompBeforeDate,
-                            queryDateKey = dateKey
-                        )
-                        isDueToday = intervalDue || isDoneToday
-                        isMandatoryToday = intervalDue
-                        daysUntilDue = DateUtils.getDaysUntilIntervalDue(
-                            intervalDays = task.intervalDays,
-                            anchorDateKey = task.intervalAnchorDate,
-                            lastCompletionDateKey = lastCompBeforeDate,
-                            queryDateKey = dateKey
-                        )
-                    }
-                    else -> {
-                        // DAILY
-                        isDueToday = true
-                        isMandatoryToday = true
-                        daysUntilDue = 0
-                    }
-                }
-
-                TaskWithCompletion(
+                TaskStatusCalculator.evaluate(
                     task = task,
                     dateKey = dateKey,
                     todayCompletions = todayCompletions,
@@ -98,7 +37,7 @@ class DailyRepository(
                     allCompletions = allCompletions
                 )
             }
-        }
+        }.flowOn(Dispatchers.Default)
     }
 
     fun getTasksWithCompletionsSync(dateKey: String): List<TaskWithCompletion> {
@@ -395,7 +334,7 @@ class DailyRepository(
             dao.getAllCompletionsFlow()
         ) { tasks, allCompletions ->
             calculateFullyCompletedDates(tasks, allCompletions)
-        }
+        }.flowOn(Dispatchers.Default)
     }
 
     fun getFullyCompletedDatesSync(): List<String> {

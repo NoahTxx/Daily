@@ -26,23 +26,28 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  val debugKeystoreFile = file("${rootDir}/debug.keystore")
+  val hasDebugKeystore = debugKeystoreFile.exists() && debugKeystoreFile.isFile
+
   signingConfigs {
     create("release") {
       if (hasReleaseKeystore) {
         storeFile = releaseKeystoreFile
         storePassword = System.getenv("STORE_PASSWORD")
-      } else {
-        storeFile = file("${rootDir}/debug.keystore")
+      } else if (hasDebugKeystore) {
+        storeFile = debugKeystoreFile
         storePassword = "android"
       }
       keyAlias = if (hasReleaseKeystore) "upload" else "androiddebugkey"
       keyPassword = if (hasReleaseKeystore) System.getenv("KEY_PASSWORD") else "android"
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      if (hasDebugKeystore) {
+        storeFile = debugKeystoreFile
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
   }
 
@@ -51,9 +56,13 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debugConfig")
+      signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else if (hasDebugKeystore) signingConfigs.getByName("debugConfig") else signingConfigs.getByName("debug")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    debug {
+      if (hasDebugKeystore) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      }
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
