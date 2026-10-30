@@ -233,6 +233,21 @@ fun TaskEditDialog(
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = category,
+                onValueChange = { category = it },
+                label = { Text(t("category_custom_label"), style = MaterialTheme.typography.bodySmall.copy(fontFamily = bodyFont)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = accentColor,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                )
+            )
+
             Spacer(modifier = Modifier.height(20.dp))
 
             // Habit Schedule / Frequency Selection (Daily vs Weekly vs Weekdays)

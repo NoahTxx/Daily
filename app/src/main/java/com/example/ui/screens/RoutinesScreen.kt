@@ -181,17 +181,54 @@ fun RoutinesScreen(
                     }
                 }
             } else {
-                items(
-                    items = tasks,
-                    key = { it.id },
-                    contentType = { "routine_card" }
-                ) { task ->
-                    RoutineItemCard(
-                        task = task,
-                        onEdit = { onEditTaskClick(task) },
-                        onToggleActive = { viewModel.toggleTaskActive(task) },
-                        onDelete = { viewModel.deleteTask(task) }
-                    )
+                val activeTasks = tasks.filter { !it.isArchived }
+                val pausedTasks = tasks.filter { it.isArchived }
+
+                if (activeTasks.isNotEmpty()) {
+                    item(key = "active_header", contentType = "section_header") {
+                        com.example.ui.components.TaskSectionHeader(
+                            title = t("active_badge"),
+                            count = activeTasks.size,
+                            isAccent = true
+                        )
+                    }
+
+                    items(
+                        items = activeTasks,
+                        key = { it.id },
+                        contentType = { "routine_card" }
+                    ) { task ->
+                        RoutineItemCard(
+                            task = task,
+                            onEdit = { onEditTaskClick(task) },
+                            onToggleActive = { viewModel.toggleTaskActive(task) },
+                            onDelete = { viewModel.deleteTask(task) }
+                        )
+                    }
+                }
+
+                if (pausedTasks.isNotEmpty()) {
+                    item(key = "paused_header", contentType = "section_header") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        com.example.ui.components.TaskSectionHeader(
+                            title = t("paused_badge"),
+                            count = pausedTasks.size,
+                            isAccent = false
+                        )
+                    }
+
+                    items(
+                        items = pausedTasks,
+                        key = { it.id },
+                        contentType = { "routine_card" }
+                    ) { task ->
+                        RoutineItemCard(
+                            task = task,
+                            onEdit = { onEditTaskClick(task) },
+                            onToggleActive = { viewModel.toggleTaskActive(task) },
+                            onDelete = { viewModel.deleteTask(task) }
+                        )
+                    }
                 }
             }
         }

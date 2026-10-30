@@ -227,6 +227,17 @@ object AppStrings {
             "widget_progress_all_done" -> if (isEn) "ALL DONE" else "ALLES ERLEDIGT"
             "widget_progress_no_habits" -> if (isEn) "NO HABITS TODAY" else "KEINE AUFGABEN HEUTE"
 
+            // Backup & Restore
+            "backup_title" -> if (isEn) "BACKUP & RESTORE" else "DATENSICHERUNG & WIEDERHERSTELLUNG"
+            "backup_desc" -> if (isEn) "Export or import your habit data & history as JSON" else "Habits & Historie als JSON sichern oder wiederherstellen"
+            "backup_export_btn" -> if (isEn) "EXPORT BACKUP" else "DATEN EXPORTIEREN"
+            "backup_import_btn" -> if (isEn) "IMPORT BACKUP" else "DATEN IMPORTIEREN"
+            "backup_export_success" -> if (isEn) "Backup exported successfully!" else "Backup erfolgreich exportiert!"
+            "backup_export_failed" -> if (isEn) "Export failed." else "Export fehlgeschlagen."
+            "backup_import_success" -> if (isEn) "Backup restored successfully!" else "Daten erfolgreich wiederhergestellt!"
+            "backup_import_failed" -> if (isEn) "Import failed. Invalid file." else "Import fehlgeschlagen. Ungültige Datei."
+            "category_custom_label" -> if (isEn) "Custom Category" else "Eigene Kategorie"
+
             else -> key
         }
     }

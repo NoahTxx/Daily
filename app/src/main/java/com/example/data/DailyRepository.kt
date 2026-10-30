@@ -312,6 +312,114 @@ class DailyRepository(
         }
     }
 
+    suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {
+        val tasks = dao.getAllTasksSync()
+        val completions = dao.getAllCompletionsSync()
+
+        val root = org.json.JSONObject()
+        root.put("version", 1)
+        root.put("timestamp", System.currentTimeMillis())
+
+        val tasksArray = org.json.JSONArray()
+        for (t in tasks) {
+            val taskObj = org.json.JSONObject()
+            taskObj.put("id", t.id)
+            taskObj.put("title", t.title)
+            taskObj.put("category", t.category)
+            taskObj.put("reminderHour", t.reminderHour ?: org.json.JSONObject.NULL)
+            taskObj.put("reminderMinute", t.reminderMinute ?: org.json.JSONObject.NULL)
+            taskObj.put("reminderEnabled", t.reminderEnabled)
+            taskObj.put("iconName", t.iconName)
+            taskObj.put("orderIndex", t.orderIndex)
+            taskObj.put("isArchived", t.isArchived)
+            taskObj.put("isCounter", t.isCounter)
+            taskObj.put("targetCount", t.targetCount)
+            taskObj.put("unit", t.unit)
+            taskObj.put("frequencyType", t.frequencyType)
+            taskObj.put("targetDaysPerWeek", t.targetDaysPerWeek)
+            taskObj.put("daysOfWeek", t.daysOfWeek)
+            taskObj.put("intervalDays", t.intervalDays)
+            taskObj.put("intervalAnchorDate", t.intervalAnchorDate)
+            taskObj.put("createdAt", t.createdAt)
+            tasksArray.put(taskObj)
+        }
+        root.put("tasks", tasksArray)
+
+        val completionsArray = org.json.JSONArray()
+        for (c in completions) {
+            val compObj = org.json.JSONObject()
+            compObj.put("id", c.id)
+            compObj.put("taskId", c.taskId)
+            compObj.put("dateKey", c.dateKey)
+            compObj.put("count", c.count)
+            compObj.put("completedAt", c.completedAt)
+            completionsArray.put(compObj)
+        }
+        root.put("completions", completionsArray)
+
+        root.toString(2)
+    }
+
+    suspend fun importBackupJson(jsonString: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val root = org.json.JSONObject(jsonString)
+            val tasksArray = root.optJSONArray("tasks") ?: return@withContext false
+            val completionsArray = root.optJSONArray("completions") ?: org.json.JSONArray()
+
+            val idMapping = mutableMapOf<Long, Long>()
+
+            for (i in 0 until tasksArray.length()) {
+                val obj = tasksArray.getJSONObject(i)
+                val oldId = obj.optLong("id", 0L)
+                val task = DailyTask(
+                    id = 0L,
+                    title = obj.getString("title"),
+                    category = obj.optString("category", "Routine"),
+                    reminderHour = if (obj.isNull("reminderHour")) null else obj.optInt("reminderHour"),
+                    reminderMinute = if (obj.isNull("reminderMinute")) null else obj.optInt("reminderMinute"),
+                    reminderEnabled = obj.optBoolean("reminderEnabled", false),
+                    iconName = obj.optString("iconName", "check"),
+                    orderIndex = obj.optInt("orderIndex", 0),
+                    isArchived = obj.optBoolean("isArchived", false),
+                    isCounter = obj.optBoolean("isCounter", false),
+                    targetCount = obj.optInt("targetCount", 1),
+                    unit = obj.optString("unit", "x"),
+                    frequencyType = obj.optString("frequencyType", "DAILY"),
+                    targetDaysPerWeek = obj.optInt("targetDaysPerWeek", 1),
+                    daysOfWeek = obj.optString("daysOfWeek", "1,2,3,4,5,6,7"),
+                    intervalDays = obj.optInt("intervalDays", 1),
+                    intervalAnchorDate = obj.optString("intervalAnchorDate", ""),
+                    createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                )
+                val newId = dao.insertTask(task)
+                if (oldId != 0L) {
+                    idMapping[oldId] = newId
+                }
+            }
+
+            for (i in 0 until completionsArray.length()) {
+                val obj = completionsArray.getJSONObject(i)
+                val oldTaskId = obj.getLong("taskId")
+                val newTaskId = idMapping[oldTaskId] ?: oldTaskId
+                val comp = TaskCompletion(
+                    id = 0L,
+                    taskId = newTaskId,
+                    dateKey = obj.getString("dateKey"),
+                    count = obj.optInt("count", 1),
+                    completedAt = obj.optLong("completedAt", System.currentTimeMillis())
+                )
+                dao.insertCompletion(comp)
+            }
+
+            com.example.reminder.ReminderManager.rescheduleAllReminders(context)
+            DailyWidgetProvider.notifyDataChanged(context)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
     fun getRecentCompletions(startDateKey: String): Flow<List<TaskCompletion>> {
         return dao.getRecentCompletionsFlow(startDateKey)
     }

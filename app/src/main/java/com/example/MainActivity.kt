@@ -211,7 +211,8 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
 
                 DailyNavTab.SETTINGS -> {
                     SettingsScreen(
-                        appSettings = appSettings
+                        appSettings = appSettings,
+                        viewModel = viewModel
                     )
                 }
             }

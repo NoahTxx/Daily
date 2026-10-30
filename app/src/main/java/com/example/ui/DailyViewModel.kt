@@ -224,6 +224,41 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun exportDataToFile(context: android.content.Context, uri: android.net.Uri, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = try {
+                val jsonStr = repository.exportBackupJson()
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(jsonStr.toByteArray(Charsets.UTF_8))
+                }
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+            withContext(Dispatchers.Main) {
+                onResult(success)
+            }
+        }
+    }
+
+    fun importDataFromFile(context: android.content.Context, uri: android.net.Uri, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = try {
+                val jsonStr = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                if (!jsonStr.isNullOrBlank()) {
+                    repository.importBackupJson(jsonStr)
+                } else false
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+            withContext(Dispatchers.Main) {
+                onResult(success)
+            }
+        }
+    }
+
     private fun calculateFullStreakStats(completionDates: List<String>): StreakStats {
         if (completionDates.isEmpty()) return StreakStats()
 
