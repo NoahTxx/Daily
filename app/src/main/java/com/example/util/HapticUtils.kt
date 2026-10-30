@@ -1,7 +1,9 @@
 package com.example.util
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.os.Build
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -9,7 +11,7 @@ import android.os.VibratorManager
 object HapticUtils {
 
     /**
-     * Crisp double-tick vibration for completing all tasks (Tages-Abschluss).
+     * Crisp double-tick vibration for completing all tasks or finishing countdown.
      */
     fun vibrateSuccess(context: Context) {
         try {
@@ -17,13 +19,13 @@ object HapticUtils {
             if (!vibrator.hasVibrator()) return
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // High precision wave: tick (35ms), pause (40ms), strong tick (50ms)
-                val timings = longArrayOf(0, 35, 40, 50)
-                val amplitudes = intArrayOf(0, 160, 0, 255)
-                vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
+                val timings = longArrayOf(0, 40, 50, 60)
+                val amplitudes = intArrayOf(0, 180, 0, 255)
+                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
+                vibrateWithAttributes(vibrator, effect)
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(70L)
+                vibrator.vibrate(80L)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -31,23 +33,60 @@ object HapticUtils {
     }
 
     /**
-     * Subtle micro-click vibration for individual habit toggles or counters.
+     * Subtle, crisp click vibration for individual habit toggles, counters, and UI switches.
      */
     fun vibrateTick(context: Context) {
         try {
             val vibrator = getVibrator(context) ?: return
             if (!vibrator.hasVibrator()) return
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(15L, 120))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // 25ms at default amplitude ensures motor overcomes inertia on all devices (Nothing Phone, Pixel, Samsung)
+                val effect = VibrationEffect.createOneShot(25L, VibrationEffect.DEFAULT_AMPLITUDE)
+                vibrateWithAttributes(vibrator, effect)
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(15L)
+                vibrator.vibrate(25L)
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    /**
+     * Short pulse for each elapsed second while holding down confirm buttons.
+     */
+    fun vibrateHoldTick(context: Context) {
+        try {
+            val vibrator = getVibrator(context) ?: return
+            if (!vibrator.hasVibrator()) return
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val effect = VibrationEffect.createOneShot(18L, 200)
+                vibrateWithAttributes(vibrator, effect)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(18L)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+    private fun vibrateWithAttributes(vibrator: Vibrator, effect: VibrationEffect) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val attributes = VibrationAttributes.Builder()
+                .setUsage(VibrationAttributes.USAGE_TOUCH)
+                .build()
+            vibrator.vibrate(effect, attributes)
+        } else {
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .build()
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(effect, audioAttributes)
         }
     }
 

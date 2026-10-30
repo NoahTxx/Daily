@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.DailyApplication
 import com.example.data.DailyRepository
 import com.example.data.DailyTask
+import com.example.data.StreakFreeze
 import com.example.data.TaskCompletion
 import com.example.data.TaskWithCompletion
 import com.example.reminder.ReminderManager
@@ -37,7 +38,9 @@ data class StreakStats(
     val currentStreak: Int = 0,
     val longestStreak: Int = 0,
     val totalDays: Int = 0,
-    val isTodaySecured: Boolean = false
+    val isTodaySecured: Boolean = false,
+    val isTodayFrozen: Boolean = false,
+    val activeFreeze: StreakFreeze? = null
 )
 
 @Immutable
@@ -133,9 +136,21 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val streakStats: StateFlow<StreakStats> = fullyCompletedDates.map { dates ->
+    val allStreakFreezes: StateFlow<List<StreakFreeze>> = repository.getAllStreakFreezesFlow()
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val activeFreezeToday: StateFlow<StreakFreeze?> = allStreakFreezes.map { freezes ->
+        val today = DateUtils.getTodayKey()
+        freezes.firstOrNull { today in it.startDate..it.endDate }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val streakStats: StateFlow<StreakStats> = combine(
+        fullyCompletedDates,
+        allStreakFreezes
+    ) { dates, freezes ->
         withContext(Dispatchers.Default) {
-            calculateFullStreakStats(dates)
+            calculateFullStreakStats(dates, freezes)
         }
     }
         .flowOn(Dispatchers.Default)
@@ -145,6 +160,39 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
     val currentStreak: StateFlow<Int> = streakStats.map { it.currentStreak }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    fun activateStreakFreeze(
+        startDate: String,
+        endDate: String,
+        type: String = "SICKNESS",
+        note: String = "",
+        onDone: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val freeze = StreakFreeze(
+                startDate = startDate,
+                endDate = endDate,
+                type = type,
+                note = note
+            )
+            repository.insertStreakFreeze(freeze)
+            withContext(Dispatchers.Main) {
+                onDone()
+            }
+        }
+    }
+
+    fun cancelStreakFreeze(freeze: StreakFreeze) {
+        viewModelScope.launch {
+            repository.deleteStreakFreeze(freeze)
+        }
+    }
+
+    fun cancelStreakFreezeById(id: Long) {
+        viewModelScope.launch {
+            repository.deleteStreakFreezeById(id)
+        }
+    }
 
     val routinesResetInfoDismissed: StateFlow<Boolean> =
         com.example.util.AppSettings.getInstance(application).routinesResetInfoDismissed
@@ -259,30 +307,46 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun calculateFullStreakStats(completionDates: List<String>): StreakStats {
-        if (completionDates.isEmpty()) return StreakStats()
+    private fun isDateFrozen(dateKey: String, freezes: List<StreakFreeze>): Boolean {
+        return freezes.any { dateKey >= it.startDate && dateKey <= it.endDate }
+    }
 
+    private fun calculateFullStreakStats(
+        completionDates: List<String>,
+        freezes: List<StreakFreeze> = emptyList()
+    ): StreakStats {
         val dateSet = completionDates.toSet()
         val todayKey = DateUtils.getTodayKey()
-        val isTodaySecured = dateSet.contains(todayKey)
+        val isTodayFrozen = isDateFrozen(todayKey, freezes)
+        val isTodayDone = dateSet.contains(todayKey)
+        val isTodaySecured = isTodayDone || isTodayFrozen
+        val activeFreeze = freezes.firstOrNull { todayKey >= it.startDate && todayKey <= it.endDate }
+
+        if (completionDates.isEmpty() && freezes.isEmpty()) {
+            return StreakStats(
+                isTodaySecured = isTodaySecured,
+                isTodayFrozen = isTodayFrozen,
+                activeFreeze = activeFreeze
+            )
+        }
 
         // 1. Current streak calculation
         var checkKey = todayKey
         var currentStreak = 0
 
-        if (!dateSet.contains(checkKey)) {
-            // Check yesterday
-            checkKey = DateUtils.addDays(checkKey, -1)
+        if (!isTodayDone && !isTodayFrozen) {
+            checkKey = DateUtils.addDays(todayKey, -1)
+        }
+
+        while (true) {
             if (dateSet.contains(checkKey)) {
-                while (dateSet.contains(checkKey)) {
-                    currentStreak++
-                    checkKey = DateUtils.addDays(checkKey, -1)
-                }
-            }
-        } else {
-            while (dateSet.contains(checkKey)) {
                 currentStreak++
                 checkKey = DateUtils.addDays(checkKey, -1)
+            } else if (isDateFrozen(checkKey, freezes)) {
+                // A frozen day preserves the streak without breaking it
+                checkKey = DateUtils.addDays(checkKey, -1)
+            } else {
+                break
             }
         }
 
@@ -300,7 +364,21 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                 if (diffDays == 1) {
                     tempStreak++
                 } else if (diffDays > 1) {
-                    tempStreak = 1
+                    // Check if all days in between were frozen
+                    var allMidFrozen = true
+                    var mid = DateUtils.addDays(prevDateStr, 1)
+                    while (mid < dStr) {
+                        if (!isDateFrozen(mid, freezes)) {
+                            allMidFrozen = false
+                            break
+                        }
+                        mid = DateUtils.addDays(mid, 1)
+                    }
+                    if (allMidFrozen) {
+                        tempStreak++
+                    } else {
+                        tempStreak = 1
+                    }
                 }
             }
             if (tempStreak > longestStreak) {
@@ -317,7 +395,9 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
             currentStreak = currentStreak,
             longestStreak = longestStreak,
             totalDays = dateSet.size,
-            isTodaySecured = isTodaySecured
+            isTodaySecured = isTodaySecured,
+            isTodayFrozen = isTodayFrozen,
+            activeFreeze = activeFreeze
         )
     }
 

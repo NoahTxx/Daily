@@ -7,7 +7,9 @@ import com.example.DailyApplication
 import com.example.R
 import com.example.data.DailyDatabase
 import com.example.data.DailyTask
+import com.example.data.StreakFreeze
 import com.example.data.TaskCompletion
+import com.example.data.TaskWithCompletion
 import com.example.util.DateUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -608,4 +610,117 @@ class ExampleRobolectricTest {
         assertNotNull(loaded)
         assertEquals("Test Habit Disk", loaded?.title)
     }
+
+    @Test
+    fun testStreakFreezePersistenceAndQuery() = runBlocking {
+        val dao = db.dailyTaskDao()
+        val freeze = StreakFreeze(
+            startDate = "2026-10-30",
+            endDate = "2026-11-02",
+            type = "SICKNESS",
+            note = "Flu rest"
+        )
+        val id = dao.insertStreakFreeze(freeze)
+        assertTrue(id > 0)
+
+        val all = dao.getAllStreakFreezesSync()
+        assertEquals(1, all.size)
+        assertEquals("SICKNESS", all[0].type)
+
+        // Inside date range
+        val active = dao.getActiveFreezeForDate("2026-10-31")
+        assertNotNull(active)
+        assertEquals("2026-10-30", active?.startDate)
+
+        // Outside date range
+        val inactive = dao.getActiveFreezeForDate("2026-11-05")
+        assertNull(inactive)
+
+        dao.deleteStreakFreezeById(id)
+        assertTrue(dao.getAllStreakFreezesSync().isEmpty())
+    }
+
+    @Test
+    fun testFocusTimerHabitAndDurationPersistence() = runBlocking {
+        val dao = db.dailyTaskDao()
+        val task = DailyTask(
+            title = "Daily Meditation",
+            category = "Focus",
+            iconName = "meditation",
+            durationMinutes = 20
+        )
+        val id = dao.insertTask(task)
+        val loaded = dao.getTaskById(id)
+        assertNotNull(loaded)
+        assertEquals(20, loaded?.durationMinutes)
+        assertEquals(true, loaded?.isTimer)
+        assertEquals("meditation", loaded?.iconName)
+    }
+
+    @Test
+    fun testTaskSortingByTimeOfDayNoTimeFirst() {
+        val taskNoTime1 = TaskWithCompletion(DailyTask(id = 1, title = "Vitamins", orderIndex = 0), isCompleted = false)
+        val task1600 = TaskWithCompletion(DailyTask(id = 2, title = "Walk", reminderEnabled = true, reminderHour = 16, reminderMinute = 0), isCompleted = false)
+        val task2030 = TaskWithCompletion(DailyTask(id = 3, title = "Read", reminderEnabled = true, reminderHour = 20, reminderMinute = 30), isCompleted = false)
+        val taskNoTime2 = TaskWithCompletion(DailyTask(id = 4, title = "Water", orderIndex = 1), isCompleted = false)
+
+        val list = listOf(task2030, taskNoTime2, task1600, taskNoTime1)
+
+        val timeComparator = compareBy<TaskWithCompletion> { taskWithComp ->
+            val t = taskWithComp.task
+            if (t.reminderEnabled && t.reminderHour != null && t.reminderMinute != null) {
+                1
+            } else {
+                0
+            }
+        }.thenBy { taskWithComp ->
+            val t = taskWithComp.task
+            if (t.reminderEnabled && t.reminderHour != null && t.reminderMinute != null) {
+                t.reminderHour * 60 + t.reminderMinute
+            } else {
+                t.orderIndex
+            }
+        }.thenBy { it.task.orderIndex }.thenBy { it.task.id }
+
+        val sorted = list.sortedWith(timeComparator)
+
+        // Verify: Tasks without time come first (1 then 4), then 16:00 (2), then 20:30 (3)
+        assertEquals(listOf(1L, 4L, 2L, 3L), sorted.map { it.task.id })
+    }
+
+    @Test
+    fun testStreakFreezeBackupExportAndImport() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.DailyRepository(db.dailyTaskDao(), context)
+
+        // 1. Insert task with durationMinutes and a freeze
+        repo.insertTask(DailyTask(title = "Deep Work", category = "Focus", iconName = "brain", durationMinutes = 45))
+        repo.insertStreakFreeze(StreakFreeze(startDate = "2026-10-30", endDate = "2026-11-03", type = "VACATION", note = "Holiday"))
+
+        // 2. Export backup
+        val json = repo.exportBackupJson()
+        assertTrue(json.contains("\"durationMinutes\": 45"))
+        assertTrue(json.contains("\"type\": \"VACATION\""))
+
+        // 3. Clear database
+        db.dailyTaskDao().getAllTasksSync().forEach { db.dailyTaskDao().deleteTask(it) }
+        db.dailyTaskDao().getAllStreakFreezesSync().forEach { repo.deleteStreakFreeze(it) }
+        assertTrue(db.dailyTaskDao().getAllTasksSync().isEmpty())
+        assertTrue(db.dailyTaskDao().getAllStreakFreezesSync().isEmpty())
+
+        // 4. Import backup
+        val success = repo.importBackupJson(json)
+        assertTrue(success)
+
+        val restoredTasks = db.dailyTaskDao().getAllTasksSync()
+        assertEquals(1, restoredTasks.size)
+        assertEquals(45, restoredTasks[0].durationMinutes)
+        assertEquals("brain", restoredTasks[0].iconName)
+
+        val restoredFreezes = db.dailyTaskDao().getAllStreakFreezesSync()
+        assertEquals(1, restoredFreezes.size)
+        assertEquals("VACATION", restoredFreezes[0].type)
+        assertEquals("2026-10-30", restoredFreezes[0].startDate)
+    }
 }
+

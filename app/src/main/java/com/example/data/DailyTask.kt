@@ -31,9 +31,13 @@ data class DailyTask(
     val daysOfWeek: String = "1,2,3,4,5,6,7", // comma-separated ISO day numbers (1=Mon..7=Sun) for WEEKDAYS
     val intervalDays: Int = 1, // 1..365 for INTERVAL frequency (e.g. every 5 days)
     val intervalAnchorDate: String = "", // anchor dateKey (e.g. "2026-10-04")
+    val durationMinutes: Int = 0, // 0 = not a timer habit; > 0 = focus timer target in minutes
     val createdAt: Long = System.currentTimeMillis(),
     val isArchived: Boolean = false
 ) {
+    val isTimer: Boolean
+        get() = durationMinutes > 0
+
     val reminderTimeString: String?
         get() = if (reminderEnabled && reminderHour != null && reminderMinute != null) {
             String.format(java.util.Locale.US, "%02d:%02d", reminderHour, reminderMinute)

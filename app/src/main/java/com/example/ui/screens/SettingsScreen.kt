@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -72,7 +71,6 @@ import com.example.util.AccentColor
 import com.example.util.AppLanguage
 import com.example.util.AppSettings
 import com.example.util.AppStrings
-import com.example.util.HapticUtils
 import com.example.util.BodyFont
 import com.example.util.HeadingFont
 import com.example.util.LocalAccentColor
@@ -97,7 +95,6 @@ fun SettingsScreen(
     val selectedHeadingFont by appSettings.selectedHeadingFont.collectAsState()
     val selectedBodyFont by appSettings.selectedBodyFont.collectAsState()
     val selectedLanguage by appSettings.selectedLanguage.collectAsState()
-    val vibrationEnabled by appSettings.vibrationFeedbackEnabled.collectAsState()
     val animationEnabled by appSettings.completionAnimationEnabled.collectAsState()
     var testCelebrationVisible by remember { mutableStateOf(false) }
 
@@ -301,7 +298,7 @@ fun SettingsScreen(
             }
         }
 
-        // Section: Feedback & Effects (Haptic & Completion Animation)
+        // Section: Feedback & Effects (Completion Animation)
         item {
             NothingCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -313,67 +310,7 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(18.dp)
                 ) {
-                    // Item 1: Vibrations-Feedback
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(accentColor.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Vibration,
-                                    contentDescription = null,
-                                    tint = accentColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = t("settings_haptics_title"),
-                                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = currentBodyFont),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = t("settings_haptics_desc"),
-                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = currentBodyFont),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        Switch(
-                            checked = vibrationEnabled,
-                            onCheckedChange = { isChecked ->
-                                appSettings.setVibrationFeedbackEnabled(isChecked)
-                                if (isChecked) {
-                                    HapticUtils.vibrateTick(context)
-                                }
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
-                                checkedTrackColor = accentColor,
-                                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)))
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Item 2: Completion Effect
+                    // Completion Effect
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -437,9 +374,6 @@ fun SettingsScreen(
                                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                                 .clickable {
                                     testCelebrationVisible = true
-                                    if (vibrationEnabled) {
-                                        HapticUtils.vibrateSuccess(context)
-                                    }
                                 }
                                 .defaultMinSize(minHeight = 44.dp)
                                 .padding(vertical = 10.dp),
@@ -991,8 +925,8 @@ fun SettingsScreen(
                             Text(
                                 text = t("backup_export_btn"),
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = currentHeadingFont,
-                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = currentBodyFont,
+                                    fontWeight = FontWeight.SemiBold,
                                     fontSize = 12.sp
                                 ),
                                 color = accentColor
@@ -1015,8 +949,8 @@ fun SettingsScreen(
                             Text(
                                 text = t("backup_import_btn"),
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = currentHeadingFont,
-                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = currentBodyFont,
+                                    fontWeight = FontWeight.SemiBold,
                                     fontSize = 12.sp
                                 ),
                                 color = MaterialTheme.colorScheme.onSurface

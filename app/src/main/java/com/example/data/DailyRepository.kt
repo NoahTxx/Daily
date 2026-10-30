@@ -280,6 +280,7 @@ class DailyRepository(
                     reminderMinute = 0,
                     reminderEnabled = false,
                     iconName = "book",
+                    durationMinutes = 20,
                     orderIndex = 2,
                     createdAt = 0L
                 ),
@@ -309,6 +310,19 @@ class DailyRepository(
             )
             defaults.forEach { dao.insertTask(it) }
             DailyWidgetProvider.notifyDataChanged(context)
+        } else {
+            // Upgrade existing default focus-reading habit if duration was unassigned
+            val existingTasks = dao.getAllTasksSync()
+            var changed = false
+            for (t in existingTasks) {
+                if (t.title.contains("Fokus-Lesen", ignoreCase = true) && t.durationMinutes == 0) {
+                    dao.updateTask(t.copy(durationMinutes = 20))
+                    changed = true
+                }
+            }
+            if (changed) {
+                DailyWidgetProvider.notifyDataChanged(context)
+            }
         }
     }
 
@@ -340,6 +354,7 @@ class DailyRepository(
             taskObj.put("daysOfWeek", t.daysOfWeek)
             taskObj.put("intervalDays", t.intervalDays)
             taskObj.put("intervalAnchorDate", t.intervalAnchorDate)
+            taskObj.put("durationMinutes", t.durationMinutes)
             taskObj.put("createdAt", t.createdAt)
             tasksArray.put(taskObj)
         }
@@ -357,6 +372,20 @@ class DailyRepository(
         }
         root.put("completions", completionsArray)
 
+        val freezes = dao.getAllStreakFreezesSync()
+        val freezesArray = org.json.JSONArray()
+        for (f in freezes) {
+            val fObj = org.json.JSONObject()
+            fObj.put("id", f.id)
+            fObj.put("startDate", f.startDate)
+            fObj.put("endDate", f.endDate)
+            fObj.put("type", f.type)
+            fObj.put("note", f.note)
+            fObj.put("createdAt", f.createdAt)
+            freezesArray.put(fObj)
+        }
+        root.put("freezes", freezesArray)
+
         root.toString(2)
     }
 
@@ -365,6 +394,7 @@ class DailyRepository(
             val root = org.json.JSONObject(jsonString)
             val tasksArray = root.optJSONArray("tasks") ?: return@withContext false
             val completionsArray = root.optJSONArray("completions") ?: org.json.JSONArray()
+            val freezesArray = root.optJSONArray("freezes")
 
             val idMapping = mutableMapOf<Long, Long>()
 
@@ -389,6 +419,7 @@ class DailyRepository(
                     daysOfWeek = obj.optString("daysOfWeek", "1,2,3,4,5,6,7"),
                     intervalDays = obj.optInt("intervalDays", 1),
                     intervalAnchorDate = obj.optString("intervalAnchorDate", ""),
+                    durationMinutes = obj.optInt("durationMinutes", 0),
                     createdAt = obj.optLong("createdAt", System.currentTimeMillis())
                 )
                 val newId = dao.insertTask(task)
@@ -409,6 +440,21 @@ class DailyRepository(
                     completedAt = obj.optLong("completedAt", System.currentTimeMillis())
                 )
                 dao.insertCompletion(comp)
+            }
+
+            if (freezesArray != null) {
+                for (i in 0 until freezesArray.length()) {
+                    val obj = freezesArray.getJSONObject(i)
+                    val freeze = StreakFreeze(
+                        id = 0L,
+                        startDate = obj.getString("startDate"),
+                        endDate = obj.getString("endDate"),
+                        type = obj.optString("type", "SICKNESS"),
+                        note = obj.optString("note", ""),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    )
+                    dao.insertStreakFreeze(freeze)
+                }
             }
 
             com.example.reminder.ReminderManager.rescheduleAllReminders(context)
@@ -434,6 +480,25 @@ class DailyRepository(
 
     fun getAllCompletionDates(): Flow<List<String>> {
         return dao.getAllCompletionDatesFlow()
+    }
+
+    // Streak Freezes
+    fun getAllStreakFreezesFlow(): Flow<List<StreakFreeze>> = dao.getAllStreakFreezesFlow()
+    fun getAllStreakFreezesSync(): List<StreakFreeze> = dao.getAllStreakFreezesSync()
+    fun getActiveFreezeForDateFlow(dateKey: String): Flow<StreakFreeze?> = dao.getActiveFreezeForDateFlow(dateKey)
+    suspend fun getActiveFreezeForDate(dateKey: String): StreakFreeze? = dao.getActiveFreezeForDate(dateKey)
+    suspend fun insertStreakFreeze(freeze: StreakFreeze): Long {
+        val id = dao.insertStreakFreeze(freeze)
+        DailyWidgetProvider.notifyDataChanged(context)
+        return id
+    }
+    suspend fun deleteStreakFreeze(freeze: StreakFreeze) {
+        dao.deleteStreakFreeze(freeze)
+        DailyWidgetProvider.notifyDataChanged(context)
+    }
+    suspend fun deleteStreakFreezeById(id: Long) {
+        dao.deleteStreakFreezeById(id)
+        DailyWidgetProvider.notifyDataChanged(context)
     }
 
     fun getFullyCompletedDates(): Flow<List<String>> {

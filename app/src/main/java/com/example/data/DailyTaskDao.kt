@@ -122,4 +122,27 @@ interface DailyTaskDao {
         ORDER BY tc.dateKey DESC
     """)
     fun getFullyCompletedDatesSync(): List<String>
+
+    // Streak Freezes
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStreakFreeze(freeze: StreakFreeze): Long
+
+    @Delete
+    suspend fun deleteStreakFreeze(freeze: StreakFreeze)
+
+    @Query("DELETE FROM streak_freezes WHERE id = :id")
+    suspend fun deleteStreakFreezeById(id: Long)
+
+    @Query("SELECT * FROM streak_freezes ORDER BY startDate DESC")
+    fun getAllStreakFreezesFlow(): Flow<List<StreakFreeze>>
+
+    @Query("SELECT * FROM streak_freezes ORDER BY startDate DESC")
+    fun getAllStreakFreezesSync(): List<StreakFreeze>
+
+    @Query("SELECT * FROM streak_freezes WHERE :dateKey >= startDate AND :dateKey <= endDate LIMIT 1")
+    suspend fun getActiveFreezeForDate(dateKey: String): StreakFreeze?
+
+    @Query("SELECT * FROM streak_freezes WHERE :dateKey >= startDate AND :dateKey <= endDate LIMIT 1")
+    fun getActiveFreezeForDateFlow(dateKey: String): Flow<StreakFreeze?>
 }
+

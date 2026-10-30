@@ -37,10 +37,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -75,11 +79,13 @@ import com.example.data.TaskWithCompletion
 import com.example.ui.DailyViewModel
 import com.example.ui.components.CompletionCelebrationEffect
 import com.example.ui.components.DotMatrixProgress
+import com.example.ui.components.FocusTimerSheet
 import com.example.ui.components.NothingCard
 import com.example.ui.components.NothingCheckbox
 import com.example.ui.components.NothingHeader
 import com.example.ui.components.NothingPill
 import com.example.ui.components.NotificationPermissionCard
+import com.example.ui.components.StreakFreezeDialog
 import com.example.ui.components.TaskSectionHeader
 import com.example.util.AppLanguage
 import com.example.util.AppSettings
@@ -90,6 +96,7 @@ import com.example.util.LocalAccentColor
 import com.example.util.LocalAppLanguage
 import com.example.util.LocalBodyFontFamily
 import com.example.util.LocalHeadingFontFamily
+import com.example.util.TaskIcons
 
 @Composable
 fun TodayScreen(
@@ -121,6 +128,10 @@ fun TodayScreen(
         showPermissionCard = !isGranted
     }
 
+    val activeFreeze by viewModel.activeFreezeToday.collectAsStateWithLifecycle()
+    var activeTimerTask by remember { mutableStateOf<DailyTask?>(null) }
+    var showFreezeDialog by remember { mutableStateOf(false) }
+
     val (openDueTasks, completedTasks, notDueTasks) = remember(tasks) {
         val open = mutableListOf<TaskWithCompletion>()
         val completed = mutableListOf<TaskWithCompletion>()
@@ -136,7 +147,30 @@ fun TodayScreen(
                 notDue.add(task)
             }
         }
-        Triple(open, completed, notDue)
+
+        // Sort: Tasks without time come first (ganz oben).
+        // Tasks with reminder time follow in chronological order (e.g. 16:00 before 20:30).
+        val timeComparator = compareBy<TaskWithCompletion> { taskWithComp ->
+            val t = taskWithComp.task
+            if (t.reminderEnabled && t.reminderHour != null && t.reminderMinute != null) {
+                1
+            } else {
+                0
+            }
+        }.thenBy { taskWithComp ->
+            val t = taskWithComp.task
+            if (t.reminderEnabled && t.reminderHour != null && t.reminderMinute != null) {
+                t.reminderHour * 60 + t.reminderMinute
+            } else {
+                t.orderIndex
+            }
+        }.thenBy { it.task.orderIndex }.thenBy { it.task.id }
+
+        Triple(
+            open.sortedWith(timeComparator),
+            completed.sortedWith(timeComparator),
+            notDue.sortedWith(timeComparator)
+        )
     }
 
     val completedCount = remember(tasks) {
@@ -350,26 +384,68 @@ fun TodayScreen(
                                 )
                             }
 
-                            // Streak Counter Pill
+                            // Actions: Compact Freeze Button & Streak Counter Pill (clean single-line, no text overflow)
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .background(MaterialTheme.colorScheme.surface, com.example.ui.components.ShapePill)
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, com.example.ui.components.ShapePill)
-                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                // Freeze / Pause Icon Button
                                 Box(
                                     modifier = Modifier
-                                        .size(6.dp)
+                                        .size(32.dp)
                                         .clip(CircleShape)
-                                        .background(accentColor)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = String.format(t("streak_badge_days"), currentStreak),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                        .background(
+                                            if (activeFreeze != null) accentColor.copy(alpha = 0.2f)
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (activeFreeze != null) accentColor else MaterialTheme.colorScheme.outline,
+                                            CircleShape
+                                        )
+                                        .clickable { showFreezeDialog = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (activeFreeze != null) Icons.Default.AcUnit else Icons.Default.Pause,
+                                        contentDescription = t("freeze_button_label"),
+                                        tint = if (activeFreeze != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+
+                                // Streak Counter Pill (Always single-line, never wraps)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .height(32.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant, com.example.ui.components.ShapePill)
+                                        .border(1.dp, MaterialTheme.colorScheme.outline, com.example.ui.components.ShapePill)
+                                        .padding(horizontal = 10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(accentColor)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    val dayWord = if (language == AppLanguage.EN) {
+                                        if (currentStreak == 1) "DAY" else "DAYS"
+                                    } else {
+                                        if (currentStreak == 1) "TAG" else "TAGE"
+                                    }
+                                    Text(
+                                        text = "$currentStreak $dayWord",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = headingFont,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        ),
+                                        maxLines = 1,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                             }
                         }
 
@@ -381,6 +457,84 @@ fun TodayScreen(
                             completed = completedCount,
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+                }
+            }
+
+            // Active Freeze Banner
+            if (activeFreeze != null) {
+                item(key = "active_freeze_banner", contentType = "freeze_banner") {
+                    NothingCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = com.example.ui.components.ShapeCardMedium,
+                        backgroundColor = accentColor.copy(alpha = 0.1f),
+                        borderColor = accentColor.copy(alpha = 0.5f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(accentColor),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Pause,
+                                        contentDescription = null,
+                                        tint = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = if (activeFreeze?.type == "VACATION") t("freeze_banner_vacation") else t("freeze_banner_sickness"),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontFamily = headingFont,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = accentColor
+                                    )
+                                    Text(
+                                        text = String.format(t("freeze_banner_until"), activeFreeze?.endDate ?: ""),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = bodyFont),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, accentColor, RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .clickable {
+                                        activeFreeze?.let { viewModel.cancelStreakFreeze(it) }
+                                        HapticUtils.vibrateTick(context)
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = t("freeze_cancel_btn"),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = bodyFont,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    ),
+                                    color = accentColor
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -514,6 +668,7 @@ fun TodayScreen(
                             onToggle = onToggleTask,
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
+                            onStartTimer = { task -> activeTimerTask = task },
                             isReadOnly = !isViewingToday
                         )
                     }
@@ -590,6 +745,7 @@ fun TodayScreen(
                             onToggle = onToggleTask,
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
+                            onStartTimer = { task -> activeTimerTask = task },
                             isReadOnly = !isViewingToday
                         )
                     }
@@ -615,6 +771,7 @@ fun TodayScreen(
                             onToggle = onToggleTask,
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
+                            onStartTimer = { task -> activeTimerTask = task },
                             isReadOnly = !isViewingToday
                         )
                     }
@@ -653,6 +810,38 @@ fun TodayScreen(
             language = language,
             onDismiss = { showCelebration = false }
         )
+
+        // Focus Timer Sheet
+        activeTimerTask?.let { timerTask ->
+            FocusTimerSheet(
+                task = timerTask,
+                accentColor = accentColor,
+                headingFont = headingFont,
+                bodyFont = bodyFont,
+                language = language,
+                onDismiss = { activeTimerTask = null },
+                onCompleted = {
+                    val tId = timerTask.id
+                    activeTimerTask = null
+                    onToggleTask(tId)
+                }
+            )
+        }
+
+        // Streak Freeze / Vacation Mode Dialog
+        if (showFreezeDialog) {
+            StreakFreezeDialog(
+                accentColor = accentColor,
+                headingFont = headingFont,
+                bodyFont = bodyFont,
+                language = language,
+                onDismiss = { showFreezeDialog = false },
+                onConfirmFreeze = { start, end, type, note ->
+                    viewModel.activateStreakFreeze(start, end, type, note)
+                    Toast.makeText(context, t("freeze_activated_toast"), Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
     }
 }
 
@@ -720,6 +909,7 @@ fun TaskRowItem(
     onToggle: (Long) -> Unit,
     onIncrement: (Long, Int) -> Unit = { _, _ -> },
     onEdit: (DailyTask) -> Unit,
+    onStartTimer: (DailyTask) -> Unit = {},
     isReadOnly: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -774,15 +964,28 @@ fun TaskRowItem(
         }
     }
 
-    val cardClickAction: (() -> Unit)? = remember(isReadOnly, isNotDue, item.task.isCounter, notDueToastMsg, onToggle) {
+    val cardClickAction: (() -> Unit)? = remember(isReadOnly, isNotDue, item.task, item.isCompleted, notDueToastMsg, onToggle, onStartTimer) {
         when {
             isReadOnly -> null
             isNotDue -> {
                 { Toast.makeText(context, notDueToastMsg, Toast.LENGTH_SHORT).show() }
             }
             item.task.isCounter -> null
+            item.task.durationMinutes > 0 && !item.isCompleted -> {
+                { onStartTimer(item.task) }
+            }
             else -> {
                 { onToggle(item.task.id) }
+            }
+        }
+    }
+
+    val onCheckboxClick = remember(item.task, item.isCompleted, onToggle, onStartTimer) {
+        {
+            if (item.task.durationMinutes > 0 && !item.isCompleted) {
+                onStartTimer(item.task)
+            } else {
+                onToggle(item.task.id)
             }
         }
     }
@@ -826,6 +1029,10 @@ fun TaskRowItem(
         if (item.task.isCounter) {
             "${item.count} / ${item.task.targetCount} ${item.task.unit}".trim()
         } else null
+    }
+
+    val durationText = remember(item.task.durationMinutes) {
+        if (item.task.durationMinutes > 0) "${item.task.durationMinutes} min" else null
     }
 
     val reminderText = remember(item.task.reminderEnabled, item.task.reminderHour, item.task.reminderMinute) {
@@ -874,7 +1081,7 @@ fun TaskRowItem(
                 } else if (!item.task.isCounter) {
                     NothingCheckbox(
                         checked = item.isCompleted,
-                        onCheckedChange = onToggleItem,
+                        onCheckedChange = { onCheckboxClick() },
                         enabled = !isReadOnly,
                         size = 28.dp,
                         testTag = "checkbox_${item.task.id}"
@@ -922,24 +1129,39 @@ fun TaskRowItem(
 
                 Spacer(modifier = Modifier.width(14.dp))
 
-                // Task Details
+                // Task Details: Title with habit icon
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.task.title,
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            fontFamily = bodyFont,
-                            fontSize = 16.sp,
-                            fontWeight = if (isOpenDue) FontWeight.SemiBold else FontWeight.Normal,
-                            textDecoration = if (item.isCompleted) TextDecoration.LineThrough else TextDecoration.None
-                        ),
-                        color = when {
-                            item.isCompleted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            isNotDue -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
-                            else -> MaterialTheme.colorScheme.onSurface
-                        },
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = TaskIcons.getIcon(item.task.iconName),
+                            contentDescription = null,
+                            tint = when {
+                                item.isCompleted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                isNotDue -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                else -> accentColor
+                            },
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = item.task.title,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontFamily = bodyFont,
+                                fontSize = 16.sp,
+                                fontWeight = if (isOpenDue) FontWeight.SemiBold else FontWeight.Normal,
+                                textDecoration = if (item.isCompleted) TextDecoration.LineThrough else TextDecoration.None
+                            ),
+                            color = when {
+                                item.isCompleted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                isNotDue -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                else -> MaterialTheme.colorScheme.onSurface
+                            },
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
@@ -951,9 +1173,44 @@ fun TaskRowItem(
                         isWeeklyGoalMet = item.isWeeklyGoalMet,
                         isCompleted = item.isCompleted,
                         counterText = counterText,
+                        durationText = durationText,
                         reminderText = reminderText,
                         accentColor = accentColor
                     )
+                }
+
+                // Focus Timer trigger button
+                if (item.task.durationMinutes > 0 && !isReadOnly && !item.isCompleted) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.dp, accentColor, RoundedCornerShape(8.dp))
+                            .background(accentColor.copy(alpha = 0.15f))
+                            .clickable { onStartTimer(item.task) }
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Start Timer",
+                                tint = accentColor,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "${item.task.durationMinutes}m",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = accentColor
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
                 }
 
                 // Edit button (only visible on today; locked on past days)
@@ -999,6 +1256,7 @@ fun TaskPillsSection(
     isWeeklyGoalMet: Boolean,
     isCompleted: Boolean,
     counterText: String?,
+    durationText: String? = null,
     reminderText: String?,
     accentColor: Color,
     modifier: Modifier = Modifier
@@ -1023,6 +1281,21 @@ fun TaskPillsSection(
             NothingPill(
                 text = counterText,
                 isAccent = isCompleted
+            )
+        }
+
+        if (durationText != null) {
+            NothingPill(
+                text = durationText,
+                isAccent = isOpenDue,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = null,
+                        tint = if (isOpenDue) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
             )
         }
 

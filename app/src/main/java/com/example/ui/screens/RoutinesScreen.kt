@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +64,7 @@ import com.example.util.LocalAccentColor
 import com.example.util.LocalAppLanguage
 import com.example.util.LocalBodyFontFamily
 import com.example.util.LocalHeadingFontFamily
+import com.example.util.TaskIcons
 
 @Composable
 fun RoutinesScreen(
@@ -290,6 +292,9 @@ fun RoutineItemCard(
             DateUtils.formatTime(task.reminderHour, task.reminderMinute)
         } else null
     }
+    val durationText = remember(task.durationMinutes) {
+        if (task.durationMinutes > 0) "${task.durationMinutes} min" else null
+    }
 
     NothingCard(
         modifier = modifier.fillMaxWidth(),
@@ -304,7 +309,7 @@ fun RoutineItemCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                // Title row with status dot
+                // Title row with status dot and icon
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -316,6 +321,13 @@ fun RoutineItemCard(
                             .background(if (isActive) accentColor else MaterialTheme.colorScheme.outline)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = TaskIcons.getIcon(task.iconName),
+                        contentDescription = null,
+                        tint = if (isActive) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = task.title,
                         style = MaterialTheme.typography.bodyLarge.copy(
@@ -337,6 +349,7 @@ fun RoutineItemCard(
                     isActive = isActive,
                     freqText = freqText,
                     counterText = counterText,
+                    durationText = durationText,
                     reminderText = reminderText,
                     reminderEnabled = task.reminderEnabled,
                     accentColor = accentColor,
@@ -381,6 +394,7 @@ fun RoutinePillsSection(
     isActive: Boolean,
     freqText: String?,
     counterText: String?,
+    durationText: String? = null,
     reminderText: String?,
     reminderEnabled: Boolean,
     accentColor: Color,
@@ -412,6 +426,21 @@ fun RoutinePillsSection(
             NothingPill(
                 text = counterText,
                 isAccent = isActive
+            )
+        }
+
+        if (durationText != null) {
+            NothingPill(
+                text = durationText,
+                isAccent = isActive,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = null,
+                        tint = if (isActive) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
             )
         }
 

@@ -9,8 +9,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [DailyTask::class, TaskCompletion::class],
-    version = 6,
+    entities = [DailyTask::class, TaskCompletion::class, StreakFreeze::class],
+    version = 7,
     exportSchema = false
 )
 abstract class DailyDatabase : RoomDatabase() {
@@ -61,6 +61,22 @@ abstract class DailyDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE daily_tasks ADD COLUMN durationMinutes INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS streak_freezes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        startDate TEXT NOT NULL,
+                        endDate TEXT NOT NULL,
+                        type TEXT NOT NULL DEFAULT 'SICKNESS',
+                        note TEXT NOT NULL DEFAULT '',
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+            }
+        }
+
         private fun buildDatabase(context: Context): DailyDatabase {
             return Room.databaseBuilder(
                 context.applicationContext,
@@ -70,7 +86,8 @@ abstract class DailyDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_2_3,
                     MIGRATION_3_4,
-                    MIGRATION_4_6
+                    MIGRATION_4_6,
+                    MIGRATION_6_7
                 )
                 .fallbackToDestructiveMigration()
                 .build()

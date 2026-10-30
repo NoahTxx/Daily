@@ -942,7 +942,11 @@ fun StatsScreen(
 
                                 // Today status badge
                                 Text(
-                                    text = if (streakStats.isTodaySecured) t("streak_secured") else t("streak_open"),
+                                    text = when {
+                                        streakStats.isTodayFrozen -> if (isEn) "FROZEN • PROTECTED" else "PAUSIERT • GESCHÜTZT"
+                                        streakStats.isTodaySecured -> t("streak_secured")
+                                        else -> t("streak_open")
+                                    },
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = bodyFont,
                                         fontSize = 9.sp,

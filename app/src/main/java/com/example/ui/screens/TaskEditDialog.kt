@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -62,6 +64,7 @@ import com.example.util.LocalAccentColor
 import com.example.util.LocalAppLanguage
 import com.example.util.LocalBodyFontFamily
 import com.example.util.LocalHeadingFontFamily
+import com.example.util.TaskIcons
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -83,7 +86,10 @@ fun TaskEditDialog(
 
     var title by remember { mutableStateOf(task?.title ?: "") }
     var category by remember { mutableStateOf(task?.category ?: if (isEn) "Supplements" else "Supplements") }
+    var iconName by remember { mutableStateOf(task?.iconName ?: "pill") }
     var isCounter by remember { mutableStateOf(task?.isCounter ?: false) }
+    var isTimer by remember { mutableStateOf((task?.durationMinutes ?: 0) > 0) }
+    var durationMinutesText by remember { mutableStateOf((if ((task?.durationMinutes ?: 0) > 0) task?.durationMinutes?.toString() else "15") ?: "15") }
     var frequencyType by remember { mutableStateOf(task?.frequencyType ?: "DAILY") }
     var targetDaysPerWeek by remember { mutableIntStateOf(task?.targetDaysPerWeek ?: 1) }
     var intervalDays by remember { mutableIntStateOf(task?.intervalDays ?: 5) }
@@ -247,6 +253,47 @@ fun TaskEditDialog(
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 )
             )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Habit Icon Selection
+            Text(
+                text = t("icon_label"),
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(TaskIcons.items) { item ->
+                    val isSelected = iconName.equals(item.key, ignoreCase = true)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) accentColor else MaterialTheme.colorScheme.outline,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .background(
+                                if (isSelected) accentColor.copy(alpha = 0.2f)
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            .clickable { iconName = item.key },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = if (isEn) item.labelEn else item.labelDe,
+                            tint = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -523,42 +570,49 @@ fun TaskEditDialog(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Habit Type Selection (Checkbox vs Counter)
+            // Habit Type Selection (Checkbox vs Counter vs Focus Timer)
             Text(
                 text = t("habit_type_label"),
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
+            val isSimple = !isCounter && !isTimer
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // Checkbox type
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .border(
                             1.dp,
-                            if (!isCounter) accentColor else MaterialTheme.colorScheme.outline,
-                            RoundedCornerShape(12.dp)
+                            if (isSimple) accentColor else MaterialTheme.colorScheme.outline,
+                            RoundedCornerShape(10.dp)
                         )
                         .background(
-                            if (!isCounter) accentColor.copy(alpha = 0.15f)
+                            if (isSimple) accentColor.copy(alpha = 0.15f)
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
-                        .clickable { isCounter = false }
-                        .padding(vertical = 12.dp),
+                        .clickable {
+                            isCounter = false
+                            isTimer = false
+                        }
+                        .padding(vertical = 11.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = t("type_simple"),
-                        style = MaterialTheme.typography.labelMedium.copy(
+                        style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = bodyFont,
-                            fontWeight = if (!isCounter) FontWeight.Bold else FontWeight.Normal
+                            fontWeight = if (isSimple) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 11.sp
                         ),
-                        color = if (!isCounter) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isSimple) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -566,27 +620,140 @@ fun TaskEditDialog(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .border(
                             1.dp,
                             if (isCounter) accentColor else MaterialTheme.colorScheme.outline,
-                            RoundedCornerShape(12.dp)
+                            RoundedCornerShape(10.dp)
                         )
                         .background(
                             if (isCounter) accentColor.copy(alpha = 0.15f)
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
-                        .clickable { isCounter = true }
-                        .padding(vertical = 12.dp),
+                        .clickable {
+                            isCounter = true
+                            isTimer = false
+                        }
+                        .padding(vertical = 11.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = t("type_counter"),
-                        style = MaterialTheme.typography.labelMedium.copy(
+                        style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = bodyFont,
-                            fontWeight = if (isCounter) FontWeight.Bold else FontWeight.Normal
+                            fontWeight = if (isCounter) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 11.sp
                         ),
-                        color = if (isCounter) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isCounter) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Timer type
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(
+                            1.dp,
+                            if (isTimer) accentColor else MaterialTheme.colorScheme.outline,
+                            RoundedCornerShape(10.dp)
+                        )
+                        .background(
+                            if (isTimer) accentColor.copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        .clickable {
+                            isTimer = true
+                            isCounter = false
+                        }
+                        .padding(vertical = 11.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = t("type_timer"),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = bodyFont,
+                            fontWeight = if (isTimer) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 11.sp
+                        ),
+                        color = if (isTimer) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Timer controls
+            if (isTimer) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        text = t("timer_duration_label"),
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(5, 10, 15, 20, 25, 30, 45, 60).forEach { mins ->
+                            val isSel = durationMinutesText == mins.toString()
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(
+                                        1.dp,
+                                        if (isSel) accentColor else MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .background(
+                                        if (isSel) accentColor.copy(alpha = 0.2f)
+                                        else MaterialTheme.colorScheme.surface
+                                    )
+                                    .clickable { durationMinutesText = mins.toString() }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "$mins min",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = bodyFont,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                    ),
+                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = durationMinutesText,
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() }) {
+                                durationMinutesText = input
+                            }
+                        },
+                        label = { Text(t("timer_duration_label"), style = MaterialTheme.typography.bodySmall.copy(fontFamily = bodyFont)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
                     )
                 }
             }
@@ -835,9 +1002,11 @@ fun TaskEditDialog(
                             } else {
                                 "1,2,3,4,5,6,7"
                             }
+                            val durationMins = if (isTimer) (durationMinutesText.toIntOrNull()?.coerceAtLeast(1) ?: 15) else 0
                             val updated = (task ?: DailyTask(title = title.trim())).copy(
                                 title = title.trim(),
                                 category = category,
+                                iconName = iconName,
                                 frequencyType = frequencyType,
                                 targetDaysPerWeek = if (frequencyType == "WEEKLY") targetDaysPerWeek else 1,
                                 daysOfWeek = daysCsv,
@@ -845,7 +1014,8 @@ fun TaskEditDialog(
                                 intervalAnchorDate = if (frequencyType == "INTERVAL") intervalAnchorDate.ifBlank { DateUtils.getTodayKey() } else "",
                                 isCounter = isCounter,
                                 targetCount = if (isCounter) targetCnt else 1,
-                                unit = if (isCounter) unitText.trim() else "",
+                                unit = if (isCounter) unitText.trim() else if (isTimer) "min" else "",
+                                durationMinutes = durationMins,
                                 reminderEnabled = reminderEnabled,
                                 reminderHour = if (reminderEnabled) reminderHour else null,
                                 reminderMinute = if (reminderEnabled) reminderMinute else null
