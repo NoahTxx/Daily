@@ -4,10 +4,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import androidx.core.graphics.createBitmap
 
 object WidgetBitmapUtils {
     fun createColoredCircleBitmap(sizePx: Int, color: Int): Bitmap {
-        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
@@ -18,7 +19,7 @@ object WidgetBitmapUtils {
     }
 
     fun createRingBitmap(sizePx: Int, color: Int, strokeWidthPx: Float = 3f): Bitmap {
-        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
@@ -35,9 +36,9 @@ object WidgetBitmapUtils {
         progress: Float,
         strokeWidthPx: Float,
         accentColor: Int,
-        trackColor: Int = 0xFF26262B.toInt()
+        trackColor: Int = 0xFF26262B.toInt(),
     ): Bitmap {
-        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bitmap)
         val halfStroke = strokeWidthPx / 2f
         val rect = RectF(halfStroke, halfStroke, sizePx - halfStroke, sizePx - halfStroke)
@@ -70,11 +71,11 @@ object WidgetBitmapUtils {
         heightPx: Int,
         progress: Float,
         accentColor: Int,
-        trackColor: Int = 0xFF26262B.toInt()
+        trackColor: Int = 0xFF26262B.toInt(),
     ): Bitmap {
         val safeW = widthPx.coerceAtLeast(10)
         val safeH = heightPx.coerceAtLeast(4)
-        val bitmap = Bitmap.createBitmap(safeW, safeH, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(safeW, safeH)
         val canvas = Canvas(bitmap)
         val cornerRadius = safeH / 2f
 

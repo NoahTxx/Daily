@@ -10,11 +10,8 @@ import android.widget.RemoteViews
 import androidx.compose.ui.graphics.toArgb
 import com.example.MainActivity
 import com.example.R
-import com.example.data.DailyDatabase
 import com.example.util.AppLanguage
 import com.example.util.AppSettings
-import com.example.util.AppStrings
-import com.example.util.DateUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,7 +38,7 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray
+        appWidgetIds: IntArray,
     ) {
         for (appWidgetId in appWidgetIds) {
             updateStreakWidget(context, appWidgetManager, appWidgetId)
@@ -53,7 +50,7 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        newOptions: android.os.Bundle
+        newOptions: android.os.Bundle,
     ) {
         updateStreakWidget(context, appWidgetManager, appWidgetId)
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
@@ -62,7 +59,7 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
     private fun updateStreakWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetId: Int
+        appWidgetId: Int,
     ) {
         val appSettings = AppSettings.getInstance(context)
         val accentColor = appSettings.selectedAccent.value.color.toArgb()
@@ -74,7 +71,8 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
             try {
                 val repository = com.example.data.DailyRepository.getInstance(context)
                 val fullyCompletedDates = repository.getFullyCompletedDatesSync()
-                val streak = calculateStreak(fullyCompletedDates)
+                val freezes = repository.getAllStreakFreezesSync()
+                val streak = com.example.util.StreakCalculator.calculateStreak(fullyCompletedDates, freezes)
 
                 val updatedViews = createResponsiveViews(
                     context = context,
@@ -82,7 +80,7 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
                     appWidgetId = appWidgetId,
                     streak = streak,
                     accentColor = accentColor,
-                    isEn = isEn
+                    isEn = isEn,
                 )
                 appWidgetManager.updateAppWidget(appWidgetId, updatedViews)
             } catch (e: Exception) {
@@ -97,7 +95,7 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int,
         streak: Int,
         accentColor: Int,
-        isEn: Boolean
+        isEn: Boolean,
     ): RemoteViews {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             val rvCompact = buildSingleLayout(context, R.layout.widget_streak_compact_layout, streak, accentColor, isEn, appWidgetId)
@@ -108,7 +106,7 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
                 android.util.SizeF(40f, 40f) to rvCompact,    // 1x1: number only
                 android.util.SizeF(40f, 100f) to rvCompact,   // 1x2 (width 1, height 2): number only
                 android.util.SizeF(105f, 40f) to rvWide,      // 2x1: number + text
-                android.util.SizeF(105f, 100f) to rv2x2       // 2x2: number + text
+                android.util.SizeF(105f, 100f) to rv2x2,      // 2x2: number + text
             )
             return RemoteViews(viewMapping)
         }
@@ -119,8 +117,8 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
         val maxHeight = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0) ?: 0
 
         val layoutId = when {
-            minWidth in 1..104 -> R.layout.widget_streak_compact_layout
-            minHeight >= 100 || maxHeight >= 130 -> R.layout.widget_streak_2x2_layout
+            minWidth in (1..104) -> R.layout.widget_streak_compact_layout
+            (minHeight >= 100) || (maxHeight >= 130) -> R.layout.widget_streak_2x2_layout
             else -> R.layout.widget_streak_layout
         }
 
@@ -133,7 +131,7 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
         streak: Int,
         accentColor: Int,
         isEn: Boolean,
-        appWidgetId: Int
+        appWidgetId: Int,
     ): RemoteViews {
         val views = RemoteViews(context.packageName, layoutId)
         views.setTextColor(R.id.widget_streak_count, accentColor)
@@ -157,34 +155,10 @@ class DailyStreakWidgetProvider : AppWidgetProvider() {
             context,
             appWidgetId + 2000,
             openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         views.setOnClickPendingIntent(R.id.widget_streak_root, openAppPendingIntent)
 
         return views
-    }
-
-    private fun calculateStreak(completionDates: List<String>): Int {
-        if (completionDates.isEmpty()) return 0
-        val dateSet = completionDates.toSet()
-        val cal = java.util.Calendar.getInstance()
-        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-
-        var checkKey = format.format(cal.time)
-        if (!dateSet.contains(checkKey)) {
-            cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-            checkKey = format.format(cal.time)
-            if (!dateSet.contains(checkKey)) {
-                return 0
-            }
-        }
-
-        var streak = 0
-        while (dateSet.contains(checkKey)) {
-            streak++
-            cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-            checkKey = format.format(cal.time)
-        }
-        return streak
     }
 }

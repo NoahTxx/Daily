@@ -13,6 +13,7 @@ import com.example.data.TaskWithCompletion
 import com.example.reminder.ReminderManager
 import com.example.util.AppLanguage
 import com.example.util.DateUtils
+import com.example.util.StreakCalculator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -40,7 +42,7 @@ data class StreakStats(
     val totalDays: Int = 0,
     val isTodaySecured: Boolean = false,
     val isTodayFrozen: Boolean = false,
-    val activeFreeze: StreakFreeze? = null
+    val activeFreeze: StreakFreeze? = null,
 )
 
 @Immutable
@@ -50,7 +52,7 @@ data class HabitDayStatus(
     val dayNumber: String,
     val isCompleted: Boolean,
     val isToday: Boolean,
-    val isDue: Boolean
+    val isDue: Boolean,
 )
 
 @Immutable
@@ -66,7 +68,7 @@ data class HabitStats(
     val isTodayCompleted: Boolean,
     val isTodayDue: Boolean,
     val completedDateSet: Set<String>,
-    val recent7Days: List<HabitDayStatus>
+    val recent7Days: List<HabitDayStatus>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -101,12 +103,12 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
     val habitStatsList: StateFlow<List<HabitStats>> = combine(
         allActiveTasks,
-        allCompletions
+        allCompletions,
     ) { tasks, completions ->
         tasks to completions
     }
         .distinctUntilChanged()
-        .debounce(100L)
+        .debounce(100.milliseconds)
         .map { (tasks, completions) ->
             withContext(Dispatchers.Default) {
                 calculateHabitStatsList(tasks, completions)
@@ -122,7 +124,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         }
         .combine(_selectedCategory) { list, category ->
             if (category == null) list
-            else list.filter { isCategoryEquivalent(it.task.category, category) }
+            else list.filter { (task) -> isCategoryEquivalent(task.category, category) }
         }
         .flowOn(Dispatchers.Default)
         .distinctUntilChanged()
@@ -142,12 +144,12 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
     val activeFreezeToday: StateFlow<StreakFreeze?> = allStreakFreezes.map { freezes ->
         val today = DateUtils.getTodayKey()
-        freezes.firstOrNull { today in it.startDate..it.endDate }
+        freezes.firstOrNull { (_, startDate, endDate) -> (today >= startDate) && (today <= endDate) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val streakStats: StateFlow<StreakStats> = combine(
         fullyCompletedDates,
-        allStreakFreezes
+        allStreakFreezes,
     ) { dates, freezes ->
         withContext(Dispatchers.Default) {
             calculateFullStreakStats(dates, freezes)
@@ -157,7 +159,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StreakStats())
 
-    val currentStreak: StateFlow<Int> = streakStats.map { it.currentStreak }
+    val currentStreak: StateFlow<Int> = streakStats.map { (current) -> current }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -166,14 +168,14 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         endDate: String,
         type: String = "SICKNESS",
         note: String = "",
-        onDone: () -> Unit = {}
+        onDone: () -> Unit = {},
     ) {
         viewModelScope.launch {
             val freeze = StreakFreeze(
                 startDate = startDate,
                 endDate = endDate,
                 type = type,
-                note = note
+                note = note,
             )
             repository.insertStreakFreeze(freeze)
             withContext(Dispatchers.Main) {
@@ -188,6 +190,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @Suppress("unused")
     fun cancelStreakFreezeById(id: Long) {
         viewModelScope.launch {
             repository.deleteStreakFreezeById(id)
@@ -207,7 +210,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectCategory(category: String?) {
         val current = _selectedCategory.value
-        _selectedCategory.value = if (current != null && category != null && isCategoryEquivalent(current, category)) null else category
+        _selectedCategory.value = if ((current != null) && (category != null) && isCategoryEquivalent(current, category)) null else category
     }
 
     fun toggleTask(taskId: Long) {
@@ -237,6 +240,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @Suppress("unused")
     fun setCounter(taskId: Long, count: Int) {
         if (!DateUtils.isToday(_selectedDateKey.value)) return
         viewModelScope.launch {
@@ -294,11 +298,8 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val success = try {
                 val jsonStr = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                if (!jsonStr.isNullOrBlank()) {
-                    repository.importBackupJson(jsonStr)
-                } else false
-            } catch (e: Exception) {
-                e.printStackTrace()
+                !jsonStr.isNullOrBlank() && repository.importBackupJson(jsonStr)
+            } catch (_: Exception) {
                 false
             }
             withContext(Dispatchers.Main) {
@@ -307,116 +308,28 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun isDateFrozen(dateKey: String, freezes: List<StreakFreeze>): Boolean {
-        return freezes.any { dateKey >= it.startDate && dateKey <= it.endDate }
-    }
-
     private fun calculateFullStreakStats(
         completionDates: List<String>,
-        freezes: List<StreakFreeze> = emptyList()
+        freezes: List<StreakFreeze> = emptyList(),
     ): StreakStats {
-        val dateSet = completionDates.toSet()
-        val todayKey = DateUtils.getTodayKey()
-        val isTodayFrozen = isDateFrozen(todayKey, freezes)
-        val isTodayDone = dateSet.contains(todayKey)
-        val isTodaySecured = isTodayDone || isTodayFrozen
-        val activeFreeze = freezes.firstOrNull { todayKey >= it.startDate && todayKey <= it.endDate }
-
-        if (completionDates.isEmpty() && freezes.isEmpty()) {
-            return StreakStats(
-                isTodaySecured = isTodaySecured,
-                isTodayFrozen = isTodayFrozen,
-                activeFreeze = activeFreeze
-            )
-        }
-
-        // 1. Current streak calculation
-        var checkKey = todayKey
-        var currentStreak = 0
-
-        if (!isTodayDone && !isTodayFrozen) {
-            checkKey = DateUtils.addDays(todayKey, -1)
-        }
-
-        while (true) {
-            if (dateSet.contains(checkKey)) {
-                currentStreak++
-                checkKey = DateUtils.addDays(checkKey, -1)
-            } else if (isDateFrozen(checkKey, freezes)) {
-                // A frozen day preserves the streak without breaking it
-                checkKey = DateUtils.addDays(checkKey, -1)
-            } else {
-                break
-            }
-        }
-
-        // 2. Longest streak calculation across all historic completion dates
-        val sortedDates = completionDates.distinct().sorted()
-        var longestStreak = 0
-        var tempStreak = 0
-        var prevDateStr: String? = null
-
-        for (dStr in sortedDates) {
-            if (prevDateStr == null) {
-                tempStreak = 1
-            } else {
-                val diffDays = DateUtils.daysBetween(prevDateStr, dStr)
-                if (diffDays == 1) {
-                    tempStreak++
-                } else if (diffDays > 1) {
-                    // Check if all days in between were frozen
-                    var allMidFrozen = true
-                    var mid = DateUtils.addDays(prevDateStr, 1)
-                    while (mid < dStr) {
-                        if (!isDateFrozen(mid, freezes)) {
-                            allMidFrozen = false
-                            break
-                        }
-                        mid = DateUtils.addDays(mid, 1)
-                    }
-                    if (allMidFrozen) {
-                        tempStreak++
-                    } else {
-                        tempStreak = 1
-                    }
-                }
-            }
-            if (tempStreak > longestStreak) {
-                longestStreak = tempStreak
-            }
-            prevDateStr = dStr
-        }
-
-        if (currentStreak > longestStreak) {
-            longestStreak = currentStreak
-        }
-
-        return StreakStats(
-            currentStreak = currentStreak,
-            longestStreak = longestStreak,
-            totalDays = dateSet.size,
-            isTodaySecured = isTodaySecured,
-            isTodayFrozen = isTodayFrozen,
-            activeFreeze = activeFreeze
-        )
+        return StreakCalculator.calculateFullStreakStats(completionDates, freezes)
     }
 
     private data class HabitStatsCacheKey(
         val task: DailyTask,
         val completions: List<TaskCompletion>,
-        val todayKey: String
+        val todayKey: String,
     )
     private val habitStatsCache = java.util.concurrent.ConcurrentHashMap<Long, Pair<HabitStatsCacheKey, HabitStats>>()
 
     internal fun calculateHabitStatsList(
         tasks: List<DailyTask>,
-        completions: List<TaskCompletion>
+        completions: List<TaskCompletion>,
     ): List<HabitStats> {
-        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val todayKey = DateUtils.getTodayKey()
-        val completionsByTask = completions.groupBy { it.taskId }
+        val completionsByTask = completions.groupBy { (_, taskId) -> taskId }
 
-        val activeIds = tasks.map { it.id }.toSet()
+        val activeIds = tasks.asSequence().map { (id) -> id }.toSet()
         habitStatsCache.keys.retainAll(activeIds)
 
         val cal = Calendar.getInstance()
@@ -430,37 +343,38 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
             // Skip recalculation if task definition and completions have not changed
             val cached = habitStatsCache[task.id]
-            if (cached != null && cached.first.task == task && cached.first.completions == taskComps && cached.first.todayKey == todayKey) {
+            if ((cached != null) && (cached.first.task == task) && (cached.first.completions == taskComps) && (cached.first.todayKey == todayKey)) {
                 return@map cached.second
             }
 
             // Completion valid if count >= targetCount for counter, or count > 0 for standard
-            val validCompletions = taskComps.filter { comp ->
-                if (task.isCounter) comp.count >= task.targetCount else comp.count > 0
+            val validCompletions = taskComps.filter { (_, _, _, count) ->
+                if (task.isCounter) count >= task.targetCount else count > 0
             }
-            val completedDateSet = validCompletions.map { it.dateKey }.toSet()
+            val completedDateSet = validCompletions.asSequence().map { (_, _, dateKey) -> dateKey }.toSet()
             val totalCompletions = completedDateSet.size
 
             val totalCountSum: Long = if (task.isCounter) {
-                taskComps.sumOf { it.count.toLong() }
+                taskComps.sumOf { (_, _, _, count) -> count.toLong() }
             } else {
                 totalCompletions.toLong()
             }
 
             // Today status
-            val todayComp = taskComps.firstOrNull { it.dateKey == todayKey }
+            val todayComp = taskComps.firstOrNull { (_, _, dateKey) -> dateKey == todayKey }
             val isTodayCompleted = if (task.isCounter) {
                 (todayComp?.count ?: 0) >= task.targetCount
             } else {
-                todayComp != null && todayComp.count > 0
+                (todayComp != null) && (todayComp.count > 0)
             }
 
             val lastCompBeforeToday = validCompletions
-                .filter { it.dateKey < todayKey }
-                .maxOfOrNull { it.dateKey }
+                .asSequence()
+                .filter { (_, _, dateKey) -> dateKey < todayKey }
+                .maxOfOrNull { (_, _, dateKey) -> dateKey }
 
             val currentWeekDays = DateUtils.getDaysInSameWeek(todayKey)
-            val weeklyCompletedCountThisWeek = validCompletions.count { currentWeekDays.contains(it.dateKey) }
+            val weeklyCompletedCountThisWeek = validCompletions.count { (_, _, dateKey) -> currentWeekDays.contains(dateKey) }
 
             val isTodayDue = DateUtils.isTaskDueOnDate(
                 frequencyType = task.frequencyType,
@@ -472,14 +386,14 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                 intervalDays = task.intervalDays,
                 intervalAnchorDate = task.intervalAnchorDate,
                 lastCompletionDateKey = lastCompBeforeToday,
-                createdAtMillis = task.createdAt
+                createdAtMillis = task.createdAt,
             )
 
             // Monthly stats
             val monthlyCompletedDays = monthDates.count { completedDateSet.contains(it) }
             val monthlyDueDays = monthDates.count { dKey ->
                 val dWeekDays = DateUtils.getDaysInSameWeek(dKey)
-                val dWeekCount = validCompletions.count { dWeekDays.contains(it.dateKey) }
+                val dWeekCount = validCompletions.count { (_, _, dateKey) -> dWeekDays.contains(dateKey) }
                 DateUtils.isTaskDueOnDate(
                     frequencyType = task.frequencyType,
                     daysOfWeek = task.daysOfWeek,
@@ -487,7 +401,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                     dateKey = dKey,
                     weeklyCompletedCount = dWeekCount,
                     isCompletedOnDate = completedDateSet.contains(dKey),
-                    createdAtMillis = task.createdAt
+                    createdAtMillis = task.createdAt,
                 )
             }.coerceAtLeast(1)
 
@@ -498,7 +412,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                 val isDone = completedDateSet.contains(dKey)
                 val isTod = dKey == todayKey
                 val dWeekDays = DateUtils.getDaysInSameWeek(dKey)
-                val dWeekCount = validCompletions.count { dWeekDays.contains(it.dateKey) }
+                val dWeekCount = validCompletions.count { (_, _, dateKey) -> dWeekDays.contains(dateKey) }
                 val due = DateUtils.isTaskDueOnDate(
                     frequencyType = task.frequencyType,
                     daysOfWeek = task.daysOfWeek,
@@ -506,7 +420,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                     dateKey = dKey,
                     weeklyCompletedCount = dWeekCount,
                     isCompletedOnDate = isDone,
-                    createdAtMillis = task.createdAt
+                    createdAtMillis = task.createdAt,
                 )
                 val dayLabel = DateUtils.getDayOfWeek(dKey, AppLanguage.DE)
                 val dayNum = DateUtils.getDayNumber(dKey)
@@ -516,7 +430,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                     dayNumber = dayNum,
                     isCompleted = isDone,
                     isToday = isTod,
-                    isDue = due
+                    isDue = due,
                 )
             }
 
@@ -535,7 +449,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                 isTodayCompleted = isTodayCompleted,
                 isTodayDue = isTodayDue,
                 completedDateSet = completedDateSet,
-                recent7Days = recent7
+                recent7Days = recent7,
             )
             habitStatsCache[task.id] = Pair(HabitStatsCacheKey(task, taskComps, todayKey), computedStats)
             computedStats
@@ -545,24 +459,24 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
     private fun calculateHabitStreak(
         task: DailyTask,
         completedDates: Set<String>,
-        todayKey: String
+        todayKey: String,
     ): Pair<Int, Int> {
         if (completedDates.isEmpty()) return Pair(0, 0)
-        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
         when (task.frequencyType) {
             "WEEKDAYS" -> {
-                val allowedDays = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+                val allowedDays = task.daysOfWeek.split(",").asSequence().mapNotNull { it.trim().toIntOrNull() }.toSet()
                 if (allowedDays.isEmpty()) return calculateDailyHabitStreak(completedDates, todayKey)
 
                 // Current streak on scheduled weekdays
                 var curStreak = 0
                 var checkKey = todayKey
-                for (i in 0..365) {
+                var dayOffset = 0
+                while (dayOffset <= 365) {
                     val isoDay = DateUtils.getIsoDayOfWeek(checkKey)
                     if (allowedDays.contains(isoDay)) {
                         val isDone = completedDates.contains(checkKey)
-                        if (checkKey == todayKey && !isDone) {
+                        if ((checkKey == todayKey) && !isDone) {
                             // Today is due but not done yet, continue looking backwards
                         } else if (isDone) {
                             curStreak++
@@ -571,6 +485,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     checkKey = DateUtils.addDays(checkKey, -1)
+                    dayOffset++
                 }
 
                 // Longest streak on scheduled weekdays
@@ -608,7 +523,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun calculateWeeklyHabitStreak(
         task: DailyTask,
-        completedDates: Set<String>
+        completedDates: Set<String>,
     ): Pair<Int, Int> {
         if (completedDates.isEmpty()) return Pair(0, 0)
         val completionsByWeek = mutableMapOf<String, Int>()
@@ -640,21 +555,42 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
             }
             val count = completionsByWeek[checkKey] ?: 0
             val weekTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, checkKey)
-            if (count >= weekTarget) {
+            checkKey = if (count >= weekTarget) {
                 currentStreak++
-                checkKey = DateUtils.addDays(checkKey, -7)
+                DateUtils.addDays(checkKey, -7)
             } else {
                 break
             }
         }
 
-        return Pair(currentStreak, currentStreak)
+        // Calculate longest weekly streak across all historic weeks
+        var longestStreak = currentStreak
+        val earliestWeekKey = completionsByWeek.keys.minOrNull()
+        if (earliestWeekKey != null) {
+            var weekIter: String = earliestWeekKey
+            var tempStreak = 0
+            while (weekIter <= curWeekKey) {
+                val count = completionsByWeek[weekIter] ?: 0
+                val weekTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, weekIter)
+                if (count >= weekTarget) {
+                    tempStreak++
+                    if (tempStreak > longestStreak) {
+                        longestStreak = tempStreak
+                    }
+                } else {
+                    tempStreak = 0
+                }
+                weekIter = DateUtils.addDays(weekIter, 7)
+            }
+        }
+
+        return Pair(currentStreak, maxOf(longestStreak, currentStreak))
     }
 
     private fun calculateIntervalHabitStreak(
         task: DailyTask,
         completedDates: Set<String>,
-        todayKey: String
+        todayKey: String,
     ): Pair<Int, Int> {
         if (completedDates.isEmpty()) return Pair(0, 0)
         val sortedDates = completedDates.sorted()
@@ -665,11 +601,11 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         var currentStreak = 0
         if (daysSinceLast <= safeInterval) {
             currentStreak = 1
-            for (i in sortedDates.size - 1 downTo 1) {
+            for (i in (sortedDates.size - 1) downTo 1) {
                 val curr = sortedDates[i]
                 val prev = sortedDates[i - 1]
                 val diff = DateUtils.daysBetween(prev, curr)
-                if (diff <= safeInterval + 1) {
+                if (diff <= (safeInterval + 1)) {
                     currentStreak++
                 } else {
                     break
@@ -681,7 +617,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         var temp = 1
         for (i in 1 until sortedDates.size) {
             val diff = DateUtils.daysBetween(sortedDates[i - 1], sortedDates[i])
-            if (diff <= safeInterval + 1) {
+            if (diff <= (safeInterval + 1)) {
                 temp++
                 if (temp > longest) longest = temp
             } else {
@@ -694,7 +630,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun calculateDailyHabitStreak(
         completedDates: Set<String>,
-        todayKey: String
+        todayKey: String,
     ): Pair<Int, Int> {
         var checkKey = todayKey
         var currentStreak = 0
@@ -716,7 +652,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Longest streak
-        val sortedDates = completedDates.distinct().sorted()
+        val sortedDates = completedDates.asSequence().distinct().sorted().toList()
         var longestStreak = 0
         var tempStreak = 0
         var prevDateStr: String? = null
@@ -756,9 +692,8 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         fun isCategoryEquivalent(categoryA: String?, categoryB: String?): Boolean {
-            if (categoryA == null || categoryB == null) return categoryA == categoryB
-            if (categoryA.equals(categoryB, ignoreCase = true)) return true
-            return normalizeCategory(categoryA) == normalizeCategory(categoryB)
+            if ((categoryA == null) || (categoryB == null)) return categoryA == categoryB
+            return categoryA.equals(categoryB, ignoreCase = true) || (normalizeCategory(categoryA) == normalizeCategory(categoryB))
         }
     }
 }

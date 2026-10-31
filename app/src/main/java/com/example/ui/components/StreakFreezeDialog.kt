@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,7 +49,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,7 +56,7 @@ import com.example.util.AppLanguage
 import com.example.util.AppStrings
 import com.example.util.DateUtils
 import com.example.util.HapticUtils
-import kotlinx.coroutines.Job
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -71,7 +69,7 @@ fun StreakFreezeDialog(
     bodyFont: FontFamily,
     language: AppLanguage,
     onDismiss: () -> Unit,
-    onConfirmFreeze: (startDate: String, endDate: String, type: String, note: String) -> Unit
+    onConfirmFreeze: (startDate: String, endDate: String, type: String, note: String) -> Unit,
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -95,9 +93,9 @@ fun StreakFreezeDialog(
 
     // 5-second Hold button state
     var holdProgress by remember { mutableFloatStateOf(0f) }
-    var isHolding by remember { mutableStateOf(false) }
+    var isHolding by remember { mutableStateOf(value = false) }
     var holdSecondsRemaining by remember { mutableIntStateOf(5) }
-    var wasCancelledEarly by remember { mutableStateOf(false) }
+    var wasCancelledEarly by remember { mutableStateOf(value = false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -109,38 +107,38 @@ fun StreakFreezeDialog(
                     .padding(vertical = 12.dp)
                     .size(width = 36.dp, height = 4.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.outline)
+                    .background(MaterialTheme.colorScheme.outline),
             )
-        }
+        },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 36.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
         ) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .clip(CircleShape)
-                            .background(accentColor)
+                            .background(accentColor),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = t("freeze_dialog_title"),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = headingFont,
-                            letterSpacing = 1.sp
+                            letterSpacing = 1.sp,
                         ),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
 
@@ -148,7 +146,7 @@ fun StreakFreezeDialog(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -158,11 +156,11 @@ fun StreakFreezeDialog(
             // Reason / Mode selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 listOf(
                     "SICKNESS" to t("freeze_type_sickness"),
-                    "VACATION" to t("freeze_type_vacation")
+                    "VACATION" to t("freeze_type_vacation"),
                 ).forEach { (type, label) ->
                     val isSelected = selectedType == type
                     Box(
@@ -172,26 +170,26 @@ fun StreakFreezeDialog(
                             .border(
                                 width = if (isSelected) 1.5.dp else 1.dp,
                                 color = if (isSelected) accentColor else MaterialTheme.colorScheme.outline,
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(12.dp),
                             )
                             .background(
                                 if (isSelected) accentColor.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.surfaceVariant
+                                else MaterialTheme.colorScheme.surfaceVariant,
                             )
                             .clickable { selectedType = type }
                             .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = label,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontFamily = headingFont,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
                             ),
                             color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -203,18 +201,18 @@ fun StreakFreezeDialog(
             Text(
                 text = "ZEITRAUM / DAUER",
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 listOf(
                     1 to t("freeze_duration_1d"),
                     3 to t("freeze_duration_3d"),
                     7 to t("freeze_duration_7d"),
-                    0 to t("freeze_duration_custom")
+                    0 to t("freeze_duration_custom"),
                 ).forEach { (preset, label) ->
                     val isSel = durationPreset == preset
                     Box(
@@ -224,26 +222,26 @@ fun StreakFreezeDialog(
                             .border(
                                 width = if (isSel) 1.5.dp else 1.dp,
                                 color = if (isSel) accentColor else MaterialTheme.colorScheme.outline,
-                                shape = RoundedCornerShape(10.dp)
+                                shape = RoundedCornerShape(10.dp),
                             )
                             .background(
                                 if (isSel) accentColor.copy(alpha = 0.2f)
-                                else MaterialTheme.colorScheme.surfaceVariant
+                                else MaterialTheme.colorScheme.surfaceVariant,
                             )
                             .clickable { durationPreset = preset }
                             .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = label,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontFamily = bodyFont,
                                 fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 10.sp
+                                fontSize = 10.sp,
                             ),
                             color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -254,7 +252,7 @@ fun StreakFreezeDialog(
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Box(
                         modifier = Modifier
@@ -269,17 +267,17 @@ fun StreakFreezeDialog(
                                     { _, year, month, day ->
                                         customStartDate = String.format(java.util.Locale.US, "%04d-%02d-%02d", year, month + 1, day)
                                     },
-                                    c.get(Calendar.YEAR),
-                                    c.get(Calendar.MONTH),
-                                    c.get(Calendar.DAY_OF_MONTH)
+                                    c[Calendar.YEAR],
+                                    c[Calendar.MONTH],
+                                    c[Calendar.DAY_OF_MONTH],
                                 ).show()
                             }
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
                         Text(
                             text = String.format(t("freeze_date_from"), customStartDate),
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
 
@@ -299,17 +297,17 @@ fun StreakFreezeDialog(
                                             customEndDate = picked
                                         }
                                     },
-                                    c.get(Calendar.YEAR),
-                                    c.get(Calendar.MONTH),
-                                    c.get(Calendar.DAY_OF_MONTH)
+                                    c[Calendar.YEAR],
+                                    c[Calendar.MONTH],
+                                    c[Calendar.DAY_OF_MONTH],
                                 ).show()
                             }
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
                         Text(
                             text = String.format(t("freeze_date_to"), customEndDate),
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -324,27 +322,27 @@ fun StreakFreezeDialog(
                     .clip(RoundedCornerShape(16.dp))
                     .border(1.5.dp, accentColor, RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-                    .padding(18.dp)
+                    .padding(18.dp),
             ) {
                 Column {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = null,
                             tint = accentColor,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
                         )
                         Text(
                             text = t("freeze_warning_header"),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = headingFont,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
+                                letterSpacing = 1.sp,
                             ),
-                            color = accentColor
+                            color = accentColor,
                         )
                     }
 
@@ -354,9 +352,9 @@ fun StreakFreezeDialog(
                         text = t("freeze_warning_body"),
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = bodyFont,
-                            lineHeight = 18.sp
+                            lineHeight = 18.sp,
                         ),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -374,7 +372,7 @@ fun StreakFreezeDialog(
                     .border(
                         width = 1.5.dp,
                         color = if (isHolding) accentColor else MaterialTheme.colorScheme.outline,
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
                     )
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .pointerInput(selectedType, computedEndDate) {
@@ -386,8 +384,7 @@ fun StreakFreezeDialog(
                             holdProgress = 0f
                             holdSecondsRemaining = 5
 
-                            var holdJob: Job? = null
-                            holdJob = coroutineScope.launch {
+                            val holdJob = coroutineScope.launch {
                                 val startTime = System.currentTimeMillis()
                                 var lastSecondTicked = 5
 
@@ -398,7 +395,7 @@ fun StreakFreezeDialog(
                                     val remainingSec = (5 - (elapsed / 1000L).toInt()).coerceAtLeast(0)
                                     holdSecondsRemaining = remainingSec
 
-                                    if (remainingSec < lastSecondTicked && remainingSec > 0) {
+                                    if (remainingSec in (1 until lastSecondTicked)) {
                                         lastSecondTicked = remainingSec
                                         HapticUtils.vibrateHoldTick(context)
                                     }
@@ -412,16 +409,16 @@ fun StreakFreezeDialog(
                                         onDismiss()
                                         break
                                     }
-                                    delay(40L)
+                                    delay(40.milliseconds)
                                 }
                             }
 
                             val up = waitForUpOrCancellation()
-                            if (up == null || holdProgress < 1f) {
+                            if ((up == null) || (holdProgress < 1f)) {
                                 // Cancelled early
                                 isHolding = false
                                 holdJob.cancel()
-                                if (holdProgress in 0.05f..0.99f) {
+                                if (holdProgress in (0.05f..0.99f)) {
                                     wasCancelledEarly = true
                                     HapticUtils.vibrateTick(context)
                                 }
@@ -430,30 +427,30 @@ fun StreakFreezeDialog(
                             }
                         }
                     },
-                contentAlignment = Alignment.CenterStart
+                contentAlignment = Alignment.CenterStart,
             ) {
                 // Animated progress fill inside button
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(holdProgress)
-                        .background(accentColor)
+                        .background(accentColor),
                 )
 
                 // Button text & live countdown
                 Box(
                     modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
                             tint = if (isHolding) Color.White else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Text(
                             text = if (isHolding) {
@@ -466,9 +463,9 @@ fun StreakFreezeDialog(
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontFamily = headingFont,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
+                                letterSpacing = 1.sp,
                             ),
-                            color = if (isHolding) Color.White else MaterialTheme.colorScheme.onSurface
+                            color = if (isHolding) Color.White else MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }

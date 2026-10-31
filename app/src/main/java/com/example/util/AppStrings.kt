@@ -246,9 +246,10 @@ object AppStrings {
             "timer_start" -> if (isEn) "START" else "START"
             "timer_pause" -> if (isEn) "PAUSE" else "PAUSE"
             "timer_reset" -> if (isEn) "RESET" else "ZURÜCKSETZEN"
+            "timer_reset_confirm" -> if (isEn) "TAP AGAIN TO RESET" else "NOCHMAL TIPPEN"
             "timer_completed" -> if (isEn) "FOCUS TIME COMPLETED!" else "FOKUS-ZEIT GESCHAFFT!"
             "timer_complete_now" -> if (isEn) "MARK AS COMPLETED" else "ALS ERLEDIGT MARKIEREN"
-            "timer_hold_to_complete" -> if (isEn) "HOLD 3S TO COMPLETE" else "3S GEDRÜCKT HALTEN ZUM ABHAKEN"
+            "timer_hold_to_complete" -> if (isEn) "Timer forgotten? Hold to complete" else "Timer vergessen? Gedrückt halten"
             "timer_holding" -> if (isEn) "HOLDING... (%ds)" else "WIRD BEENDET... (%ds)"
             "timer_close" -> if (isEn) "CLOSE" else "SCHLIESSEN"
 

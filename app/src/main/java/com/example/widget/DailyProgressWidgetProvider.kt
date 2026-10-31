@@ -13,7 +13,6 @@ import android.widget.RemoteViews
 import androidx.compose.ui.graphics.toArgb
 import com.example.MainActivity
 import com.example.R
-import com.example.data.DailyDatabase
 import com.example.util.AppLanguage
 import com.example.util.AppSettings
 import com.example.util.AppStrings
@@ -42,7 +41,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray
+        appWidgetIds: IntArray,
     ) {
         for (appWidgetId in appWidgetIds) {
             updateProgressWidget(context, appWidgetManager, appWidgetId)
@@ -54,7 +53,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        newOptions: Bundle
+        newOptions: Bundle,
     ) {
         updateProgressWidget(context, appWidgetManager, appWidgetId)
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
@@ -63,7 +62,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
     private fun updateProgressWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetId: Int
+        appWidgetId: Int,
     ) {
         val appSettings = AppSettings.getInstance(context)
         val accentColor = appSettings.selectedAccent.value.color.toArgb()
@@ -76,10 +75,10 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
                 val repository = com.example.data.DailyRepository.getInstance(context)
                 val todayKey = DateUtils.getTodayKey()
                 val tasks = repository.getTasksWithCompletionsSync(todayKey)
-                val dueOrCompletedTasks = tasks.filter { it.isDueToday || it.isCompleted }
+                val dueOrCompletedTasks = tasks.filter { (_, isCompleted, _, _, _, isDueToday) -> isDueToday || isCompleted }
 
                 val total = dueOrCompletedTasks.size
-                val done = dueOrCompletedTasks.count { it.isCompleted }
+                val done = dueOrCompletedTasks.count { (_, isCompleted) -> isCompleted }
                 val percent = if (total > 0) ((done.toFloat() / total.toFloat()) * 100f).toInt() else 0
 
                 val updatedViews = createResponsiveViews(
@@ -90,7 +89,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
                     total = total,
                     percent = percent,
                     accentColor = accentColor,
-                    isEn = isEn
+                    isEn = isEn,
                 )
                 appWidgetManager.updateAppWidget(appWidgetId, updatedViews)
             } catch (e: Exception) {
@@ -107,7 +106,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         total: Int,
         percent: Int,
         accentColor: Int,
-        isEn: Boolean
+        isEn: Boolean,
     ): RemoteViews {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val rvCompact = buildCompactLayout(context, appWidgetId, done, total, percent, accentColor, isEn)
@@ -118,7 +117,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
                 SizeF(40f, 40f) to rvCompact,    // 1x1: compact percent + fraction
                 SizeF(40f, 100f) to rvCompact,   // 1x2 (tall thin): compact
                 SizeF(105f, 40f) to rvWide,      // 2x1: horizontal bar + text
-                SizeF(105f, 100f) to rvLarge     // 2x2: large gauge ring + detailed status
+                SizeF(105f, 100f) to rvLarge,    // 2x2: large gauge ring + detailed status
             )
             return RemoteViews(viewMapping)
         }
@@ -129,8 +128,8 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         val maxHeight = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0) ?: 0
 
         return when {
-            minWidth in 1..95 -> buildCompactLayout(context, appWidgetId, done, total, percent, accentColor, isEn)
-            minHeight >= 95 || maxHeight >= 120 -> buildLargeLayout(context, appWidgetId, done, total, percent, accentColor, isEn)
+            minWidth in (1..95) -> buildCompactLayout(context, appWidgetId, done, total, percent, accentColor, isEn)
+            (minHeight >= 95) || (maxHeight >= 120) -> buildLargeLayout(context, appWidgetId, done, total, percent, accentColor, isEn)
             else -> buildWideLayout(context, appWidgetId, done, total, percent, accentColor, isEn)
         }
     }
@@ -142,7 +141,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         total: Int,
         percent: Int,
         accentColor: Int,
-        isEn: Boolean
+        @Suppress("UNUSED_PARAMETER") isEn: Boolean,
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_progress_compact_layout)
         val dotBitmap = WidgetBitmapUtils.createColoredCircleBitmap(16, accentColor)
@@ -153,7 +152,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         views.setTextViewTextSize(
             R.id.widget_progress_compact_percent,
             android.util.TypedValue.COMPLEX_UNIT_SP,
-            if (percent >= 100) 20f else 22f
+            if (percent >= 100) 20f else 22f,
         )
         views.setTextColor(R.id.widget_progress_compact_percent, accentColor)
 
@@ -171,7 +170,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         total: Int,
         percent: Int,
         accentColor: Int,
-        isEn: Boolean
+        isEn: Boolean,
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_progress_wide_layout)
         val dotBitmap = WidgetBitmapUtils.createColoredCircleBitmap(20, accentColor)
@@ -182,7 +181,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         views.setTextViewTextSize(
             R.id.widget_progress_wide_percent,
             android.util.TypedValue.COMPLEX_UNIT_SP,
-            if (percent >= 100) 22f else 24f
+            if (percent >= 100) 22f else 24f,
         )
         views.setTextColor(R.id.widget_progress_wide_percent, accentColor)
 
@@ -192,7 +191,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
             String.format(
                 AppStrings.get("widget_progress_completed", if (isEn) AppLanguage.EN else AppLanguage.DE),
                 done,
-                total
+                total,
             )
         }
         views.setTextViewText(R.id.widget_progress_wide_text, completedText)
@@ -207,7 +206,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         } else {
             String.format(
                 AppStrings.get("widget_progress_left_plural", if (isEn) AppLanguage.EN else AppLanguage.DE),
-                remaining
+                remaining,
             )
         }
         views.setTextViewText(R.id.widget_progress_wide_sub, statusText)
@@ -218,7 +217,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
             widthPx = 280,
             heightPx = 16,
             progress = progressFraction,
-            accentColor = accentColor
+            accentColor = accentColor,
         )
         views.setImageViewBitmap(R.id.widget_progress_wide_bar, barBitmap)
 
@@ -233,7 +232,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         total: Int,
         percent: Int,
         accentColor: Int,
-        isEn: Boolean
+        isEn: Boolean,
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_progress_large_layout)
         val dotBitmap = WidgetBitmapUtils.createColoredCircleBitmap(20, accentColor)
@@ -247,7 +246,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         views.setTextViewTextSize(
             R.id.widget_progress_large_percent,
             android.util.TypedValue.COMPLEX_UNIT_SP,
-            if (percent >= 100) 20f else 22f
+            if (percent >= 100) 20f else 22f,
         )
         views.setTextColor(R.id.widget_progress_large_percent, accentColor)
 
@@ -259,7 +258,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
             sizePx = 200,
             progress = progressFraction,
             strokeWidthPx = 16f,
-            accentColor = accentColor
+            accentColor = accentColor,
         )
         views.setImageViewBitmap(R.id.widget_progress_large_gauge, gaugeBitmap)
 
@@ -273,7 +272,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
         } else {
             String.format(
                 AppStrings.get("widget_progress_left_plural", if (isEn) AppLanguage.EN else AppLanguage.DE),
-                remaining
+                remaining,
             )
         }
         views.setTextViewText(R.id.widget_progress_large_status, statusText)
@@ -290,7 +289,7 @@ class DailyProgressWidgetProvider : AppWidgetProvider() {
             context,
             requestCode,
             openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         views.setOnClickPendingIntent(viewId, openAppPendingIntent)
     }

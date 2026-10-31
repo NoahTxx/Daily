@@ -6,13 +6,9 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +29,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,13 +56,10 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,32 +97,33 @@ fun TodayScreen(
     tasks: List<TaskWithCompletion>,
     selectedCategory: String?,
     currentStreak: Int,
-    completionDates: List<String>,
     onAddTaskClick: () -> Unit,
     onEditTaskClick: (DailyTask) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    @Suppress("UNUSED_PARAMETER") completionDates: List<String> = emptyList(),
+    fullyCompletedDates: List<String> = emptyList(),
 ) {
     val context = LocalContext.current
     var showPermissionCard by remember {
         mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            value = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) && (
                 ContextCompat.checkSelfPermission(
                     context,
-                    Manifest.permission.POST_NOTIFICATIONS
+                    Manifest.permission.POST_NOTIFICATIONS,
                 ) != PackageManager.PERMISSION_GRANTED
-            } else false
+            ),
         )
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
+        contract = ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
         showPermissionCard = !isGranted
     }
 
     val activeFreeze by viewModel.activeFreezeToday.collectAsStateWithLifecycle()
     var activeTimerTask by remember { mutableStateOf<DailyTask?>(null) }
-    var showFreezeDialog by remember { mutableStateOf(false) }
+    var showFreezeDialog by remember { mutableStateOf(value = false) }
 
     val (openDueTasks, completedTasks, notDueTasks) = remember(tasks) {
         val open = mutableListOf<TaskWithCompletion>()
@@ -138,7 +131,7 @@ fun TodayScreen(
         val notDue = mutableListOf<TaskWithCompletion>()
 
         for (task in tasks) {
-            val isDone = task.isCompleted || (task.task.frequencyType == "WEEKLY" && task.isWeeklyGoalMet)
+            val isDone = task.isCompleted || ((task.task.frequencyType == "WEEKLY") && task.isWeeklyGoalMet)
             if (isDone) {
                 completed.add(task)
             } else if (task.isDueToday) {
@@ -150,41 +143,41 @@ fun TodayScreen(
 
         // Sort: Tasks without time come first (ganz oben).
         // Tasks with reminder time follow in chronological order (e.g. 16:00 before 20:30).
-        val timeComparator = compareBy<TaskWithCompletion> { taskWithComp ->
-            val t = taskWithComp.task
-            if (t.reminderEnabled && t.reminderHour != null && t.reminderMinute != null) {
+        val timeComparator = compareBy<TaskWithCompletion> { (t) ->
+            if (t.reminderEnabled && (t.reminderHour != null) && (t.reminderMinute != null)) {
                 1
             } else {
                 0
             }
-        }.thenBy { taskWithComp ->
-            val t = taskWithComp.task
-            if (t.reminderEnabled && t.reminderHour != null && t.reminderMinute != null) {
-                t.reminderHour * 60 + t.reminderMinute
+        }.thenBy { (t) ->
+            if (t.reminderEnabled && (t.reminderHour != null) && (t.reminderMinute != null)) {
+                (t.reminderHour * 60) + t.reminderMinute
             } else {
                 t.orderIndex
             }
-        }.thenBy { it.task.orderIndex }.thenBy { it.task.id }
+        }.thenBy { (t) -> t.orderIndex }.thenBy { (t) -> t.id }
 
         Triple(
             open.sortedWith(timeComparator),
             completed.sortedWith(timeComparator),
-            notDue.sortedWith(timeComparator)
+            notDue.sortedWith(timeComparator),
         )
     }
 
-    val completedCount = remember(tasks) {
-        tasks.count { it.isCompleted || (it.task.frequencyType == "WEEKLY" && it.isWeeklyGoalMet) }
-    }
+    val completedCount = remember(completedTasks) { completedTasks.size }
     val requiredTodayTasks = remember(tasks) {
-        val mandatory = tasks.filter {
-            it.task.frequencyType == "DAILY" ||
-            it.isMandatoryToday ||
-            (it.isDueToday && !(it.task.frequencyType == "WEEKLY" && it.isWeeklyGoalMet))
-        }
-        val extraCompleted = tasks.filter { task ->
-            !mandatory.any { it.task.id == task.task.id } &&
-            (task.isCompleted || (task.task.frequencyType == "WEEKLY" && task.isWeeklyGoalMet))
+        val mandatory = ArrayList<TaskWithCompletion>(tasks.size)
+        val extraCompleted = ArrayList<TaskWithCompletion>(tasks.size)
+        for (i in tasks.indices) {
+            val item = tasks[i]
+            val isWeeklyMet = (item.task.frequencyType == "WEEKLY") && item.isWeeklyGoalMet
+            val isDueAndNotMet = item.isDueToday && (!isWeeklyMet)
+            val isMand = (item.task.frequencyType == "DAILY") || item.isMandatoryToday || isDueAndNotMet
+            if (isMand) {
+                mandatory.add(item)
+            } else if (item.isCompleted || isWeeklyMet) {
+                extraCompleted.add(item)
+            }
         }
         mandatory + extraCompleted
     }
@@ -193,7 +186,7 @@ fun TodayScreen(
 
     val recentDays = remember { DateUtils.getPastDays(7) }
     val isViewingToday = DateUtils.isToday(selectedDateKey)
-    val completionDateSet = remember(completionDates) { completionDates.toSet() }
+    val fullyCompletedDatesSet = remember(fullyCompletedDates) { fullyCompletedDates.toSet() }
 
     val language = LocalAppLanguage.current
     val accentColor = LocalAccentColor.current
@@ -214,11 +207,11 @@ fun TodayScreen(
     val vibrationEnabled by appSettings.vibrationFeedbackEnabled.collectAsStateWithLifecycle()
     val animationEnabled by appSettings.completionAnimationEnabled.collectAsStateWithLifecycle()
 
-    var showCelebration by remember { mutableStateOf(false) }
+    var showCelebration by remember { mutableStateOf(value = false) }
     var previousCompletedCount by remember(selectedDateKey) { mutableIntStateOf(completedCount) }
 
     LaunchedEffect(completedCount, totalCount) {
-        if (totalCount > 0 && completedCount == totalCount && previousCompletedCount < totalCount && DateUtils.isToday(selectedDateKey)) {
+        if ((totalCount > 0) && (completedCount == totalCount) && (previousCompletedCount < totalCount) && DateUtils.isToday(selectedDateKey)) {
             if (animationEnabled) {
                 showCelebration = true
             }
@@ -234,15 +227,15 @@ fun TodayScreen(
             if (!isViewingToday) {
                 Toast.makeText(context, t("past_day_readonly_toast"), Toast.LENGTH_SHORT).show()
             } else {
-                val taskItem = tasks.firstOrNull { it.task.id == taskId }
-                val isItemBlocked = taskItem != null && !taskItem.isCompleted && when (taskItem.task.frequencyType) {
+                val taskItem = tasks.firstOrNull { (t) -> t.id == taskId }
+                val isItemBlocked = (taskItem != null) && !taskItem.isCompleted && when (taskItem.task.frequencyType) {
                     "WEEKDAYS" -> !taskItem.isDueToday
                     "INTERVAL" -> !taskItem.isDueToday
                     "WEEKLY" -> taskItem.isWeeklyGoalMet
                     else -> false
                 }
                 if (isItemBlocked) {
-                    val toastMsg = when (taskItem?.task?.frequencyType) {
+                    val toastMsg = when (taskItem.task.frequencyType) {
                         "WEEKDAYS" -> String.format(t("not_due_toast"), DateUtils.formatDaysOfWeekShort(taskItem.task.daysOfWeek, language))
                         "INTERVAL" -> if (language == AppLanguage.EN) "Due in ${taskItem.daysUntilDue} days" else "In ${taskItem.daysUntilDue} Tagen fällig"
                         "WEEKLY" -> if (language == AppLanguage.EN) "Weekly goal reached (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})" else "Wochenziel erreicht (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})"
@@ -262,15 +255,15 @@ fun TodayScreen(
             if (!isViewingToday) {
                 Toast.makeText(context, t("past_day_readonly_toast"), Toast.LENGTH_SHORT).show()
             } else {
-                val taskItem = tasks.firstOrNull { it.task.id == taskId }
-                val isItemBlocked = taskItem != null && !taskItem.isCompleted && when (taskItem.task.frequencyType) {
+                val taskItem = tasks.firstOrNull { (t) -> t.id == taskId }
+                val isItemBlocked = (taskItem != null) && !taskItem.isCompleted && when (taskItem.task.frequencyType) {
                     "WEEKDAYS" -> !taskItem.isDueToday
                     "INTERVAL" -> !taskItem.isDueToday
                     "WEEKLY" -> taskItem.isWeeklyGoalMet
                     else -> false
                 }
-                if (isItemBlocked && delta > 0) {
-                    val toastMsg = when (taskItem?.task?.frequencyType) {
+                if (isItemBlocked && (delta > 0)) {
+                    val toastMsg = when (taskItem.task.frequencyType) {
                         "WEEKDAYS" -> String.format(t("not_due_toast"), DateUtils.formatDaysOfWeekShort(taskItem.task.daysOfWeek, language))
                         "INTERVAL" -> if (language == AppLanguage.EN) "Due in ${taskItem.daysUntilDue} days" else "In ${taskItem.daysUntilDue} Tagen fällig"
                         "WEEKLY" -> if (language == AppLanguage.EN) "Weekly goal reached (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})" else "Wochenziel erreicht (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})"
@@ -302,7 +295,7 @@ fun TodayScreen(
                 .fillMaxSize()
                 .statusBarsPadding(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 150.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Header with noticeably enlarged "0/5" badge on the top right
             item(key = "header", contentType = "header") {
@@ -310,7 +303,7 @@ fun TodayScreen(
                     title = "DAILY",
                     subtitle = displayDate,
                     badgeText = "$completedCount / $totalCount",
-                    badgeFontSize = 26.sp
+                    badgeFontSize = 26.sp,
                 )
             }
 
@@ -323,7 +316,7 @@ fun TodayScreen(
                                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             }
                         },
-                        onDismissClick = { showPermissionCard = false }
+                        onDismissClick = { showPermissionCard = false },
                     )
                 }
             }
@@ -332,131 +325,138 @@ fun TodayScreen(
             item(key = "date_strip", contentType = "date_strip") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     recentDays.forEach { dateKey ->
+                        val isDateToday = DateUtils.isToday(dateKey)
+                        val isStreakMet = if (isDateToday) {
+                            totalCount in (1..completedCount)
+                        } else if (dateKey == selectedDateKey) {
+                            (totalCount in (1..completedCount)) || fullyCompletedDatesSet.contains(dateKey)
+                        } else {
+                            fullyCompletedDatesSet.contains(dateKey)
+                        }
+
                         DateStripItem(
                             dateKey = dateKey,
                             isSelected = dateKey == selectedDateKey,
-                            isToday = DateUtils.isToday(dateKey),
-                            hasCompletions = completionDateSet.contains(dateKey),
+                            isToday = isDateToday,
+                            isStreakMet = isStreakMet,
                             language = language,
                             accentColor = accentColor,
                             onSelectDate = { viewModel.selectDate(it) },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
             }
 
-            // Summary Card (Progress + Streak)
+            // Summary Card (Progress + Streak - Vertically centered)
             item(key = "summary_card", contentType = "summary") {
                 NothingCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = com.example.ui.components.ShapeCardLarge,
-                    backgroundColor = MaterialTheme.colorScheme.surfaceVariant
+                    backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
-                    Column(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(18.dp)
+                            .padding(18.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.weight(1f),
                         ) {
-                            Column {
-                                val summaryTitle = if (totalCount == 0) t("no_habits_title")
-                                else if (completedCount == totalCount) t("all_done_title")
-                                else String.format(t("progress_completed_of"), completedCount, totalCount)
+                            val summaryTitle = if (totalCount == 0) t("no_habits_title")
+                            else if (completedCount == totalCount) t("all_done_title")
+                            else String.format(t("progress_completed_of"), completedCount, totalCount)
 
-                                Text(
-                                    text = summaryTitle,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = String.format(t("progress_percent"), progressPct),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = accentColor
-                                )
-                            }
-
-                            // Actions: Compact Freeze Button & Streak Counter Pill (clean single-line, no text overflow)
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // Freeze / Pause Icon Button
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (activeFreeze != null) accentColor.copy(alpha = 0.2f)
-                                            else MaterialTheme.colorScheme.surfaceVariant
-                                        )
-                                        .border(
-                                            1.dp,
-                                            if (activeFreeze != null) accentColor else MaterialTheme.colorScheme.outline,
-                                            CircleShape
-                                        )
-                                        .clickable { showFreezeDialog = true },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (activeFreeze != null) Icons.Default.AcUnit else Icons.Default.Pause,
-                                        contentDescription = t("freeze_button_label"),
-                                        tint = if (activeFreeze != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-
-                                // Streak Counter Pill (Always single-line, never wraps)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .height(32.dp)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant, com.example.ui.components.ShapePill)
-                                        .border(1.dp, MaterialTheme.colorScheme.outline, com.example.ui.components.ShapePill)
-                                        .padding(horizontal = 10.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(accentColor)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    val dayWord = if (language == AppLanguage.EN) {
-                                        if (currentStreak == 1) "DAY" else "DAYS"
-                                    } else {
-                                        if (currentStreak == 1) "TAG" else "TAGE"
-                                    }
-                                    Text(
-                                        text = "$currentStreak $dayWord",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = headingFont,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
-                                        ),
-                                        maxLines = 1,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
+                            Text(
+                                text = summaryTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = String.format(t("progress_percent"), progressPct),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accentColor,
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            // Dot Matrix Progress
+                            DotMatrixProgress(
+                                total = totalCount,
+                                completed = completedCount,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
 
-                        // Dot Matrix Progress
-                        DotMatrixProgress(
-                            total = totalCount,
-                            completed = completedCount,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // Actions: Compact Freeze Button & Streak Counter Pill (clean single-line, perfectly vertically centered)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            // Freeze / Pause Icon Button
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (activeFreeze != null) accentColor.copy(alpha = 0.2f)
+                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (activeFreeze != null) accentColor else MaterialTheme.colorScheme.outline,
+                                        CircleShape,
+                                    )
+                                    .clickable { showFreezeDialog = true },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = if (activeFreeze != null) Icons.Default.AcUnit else Icons.Default.Pause,
+                                    contentDescription = t("freeze_button_label"),
+                                    tint = if (activeFreeze != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+
+                            // Streak Counter Pill (Always single-line, never wraps)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .height(34.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, com.example.ui.components.ShapePill)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, com.example.ui.components.ShapePill)
+                                    .padding(horizontal = 10.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(accentColor),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                val dayWord = if (language == AppLanguage.EN) {
+                                    if (currentStreak == 1) "DAY" else "DAYS"
+                                } else {
+                                    if (currentStreak == 1) "TAG" else "TAGE"
+                                }
+                                Text(
+                                    text = "$currentStreak $dayWord",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = headingFont,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                    ),
+                                    maxLines = 1,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -468,32 +468,32 @@ fun TodayScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = com.example.ui.components.ShapeCardMedium,
                         backgroundColor = accentColor.copy(alpha = 0.1f),
-                        borderColor = accentColor.copy(alpha = 0.5f)
+                        borderColor = accentColor.copy(alpha = 0.5f),
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(32.dp)
                                         .clip(CircleShape)
                                         .background(accentColor),
-                                    contentAlignment = Alignment.Center
+                                    contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Pause,
                                         contentDescription = null,
                                         tint = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(16.dp),
                                     )
                                 }
                                 Column {
@@ -501,14 +501,14 @@ fun TodayScreen(
                                         text = if (activeFreeze?.type == "VACATION") t("freeze_banner_vacation") else t("freeze_banner_sickness"),
                                         style = MaterialTheme.typography.labelMedium.copy(
                                             fontFamily = headingFont,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
                                         ),
-                                        color = accentColor
+                                        color = accentColor,
                                     )
                                     Text(
                                         text = String.format(t("freeze_banner_until"), activeFreeze?.endDate ?: ""),
                                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = bodyFont),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
@@ -522,16 +522,16 @@ fun TodayScreen(
                                         activeFreeze?.let { viewModel.cancelStreakFreeze(it) }
                                         HapticUtils.vibrateTick(context)
                                     }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
                             ) {
                                 Text(
                                     text = t("freeze_cancel_btn"),
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = bodyFont,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp
+                                        fontSize = 10.sp,
                                     ),
-                                    color = accentColor
+                                    color = accentColor,
                                 )
                             }
                         }
@@ -543,15 +543,16 @@ fun TodayScreen(
             item(key = "category_filter", contentType = "category_filter") {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(
                         items = categories,
-                        key = { it }
+                        key = { it },
+                        contentType = { _ -> "category_filter_pill" },
                     ) { cat ->
                         val isSelected = when (cat) {
                             "ALL", "ALLE" -> selectedCategory == null
-                            else -> selectedCategory != null && DailyViewModel.isCategoryEquivalent(selectedCategory, cat)
+                            else -> (selectedCategory != null) && DailyViewModel.isCategoryEquivalent(selectedCategory, cat)
                         }
 
                         Box(
@@ -559,12 +560,12 @@ fun TodayScreen(
                                 .background(
                                     if (isSelected) accentColor.copy(alpha = 0.15f)
                                     else MaterialTheme.colorScheme.surface,
-                                    com.example.ui.components.ShapePill
+                                    com.example.ui.components.ShapePill,
                                 )
                                 .border(
                                     1.dp,
                                     if (isSelected) accentColor else MaterialTheme.colorScheme.outline,
-                                    com.example.ui.components.ShapePill
+                                    com.example.ui.components.ShapePill,
                                 )
                                 .clickable {
                                     val catToSelect = when (cat) {
@@ -573,12 +574,12 @@ fun TodayScreen(
                                     }
                                     viewModel.selectCategory(catToSelect)
                                 }
-                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
                         ) {
                             Text(
                                 text = cat,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -593,11 +594,11 @@ fun TodayScreen(
                             .fillMaxWidth()
                             .padding(vertical = 2.dp),
                         horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         NothingPill(
                             text = "• " + t("past_day_tag") + " •",
-                            isAccent = false
+                            isAccent = false,
                         )
                     }
                 }
@@ -610,39 +611,39 @@ fun TodayScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 24.dp),
-                        backgroundColor = MaterialTheme.colorScheme.surface
+                        backgroundColor = MaterialTheme.colorScheme.surface,
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .clip(CircleShape)
                                     .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-                                contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(8.dp)
                                         .clip(CircleShape)
-                                        .background(accentColor)
+                                        .background(accentColor),
                                 )
                             }
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = t("no_habits_title"),
                                 style = MaterialTheme.typography.titleMedium.copy(fontFamily = headingFont),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = t("no_habits_subtitle"),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = bodyFont),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -654,14 +655,14 @@ fun TodayScreen(
                         TaskSectionHeader(
                             title = t("section_due_open"),
                             count = openDueTasks.size,
-                            isAccent = true
+                            isAccent = true,
                         )
                     }
 
                     items(
                         items = openDueTasks,
-                        key = { it.task.id },
-                        contentType = { "task_row" }
+                        key = { (t) -> t.id },
+                        contentType = { (_) -> "task_row" },
                     ) { item ->
                         TaskRowItem(
                             item = item,
@@ -669,36 +670,36 @@ fun TodayScreen(
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
                             onStartTimer = { task -> activeTimerTask = task },
-                            isReadOnly = !isViewingToday
+                            isReadOnly = !isViewingToday,
                         )
                     }
-                } else if (totalCount > 0 && completedCount >= totalCount) {
+                } else if (totalCount in (1..completedCount)) {
                     // All due habits completed for today!
                     item(key = "all_done_card", contentType = "all_done") {
                         NothingCard(
                             modifier = Modifier.fillMaxWidth(),
                             shape = com.example.ui.components.ShapeCardMedium,
                             backgroundColor = accentColor.copy(alpha = 0.08f),
-                            borderColor = accentColor.copy(alpha = 0.4f)
+                            borderColor = accentColor.copy(alpha = 0.4f),
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(CircleShape)
                                         .background(accentColor),
-                                    contentAlignment = Alignment.Center
+                                    contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
                                         tint = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(14.dp))
@@ -707,22 +708,20 @@ fun TodayScreen(
                                         text = t("all_done_title"),
                                         style = MaterialTheme.typography.titleMedium.copy(
                                             fontFamily = headingFont,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
                                         ),
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface,
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = t("all_done_subtitle"),
                                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = bodyFont),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
                         }
                     }
-                } else if (openDueTasks.isEmpty() && completedTasks.isEmpty() && notDueTasks.isNotEmpty()) {
-                    // All tasks for today are not due (e.g. rest day) - rendered cleanly under the notDueTasks section below
                 }
 
                 // 2. COMPLETED TASKS
@@ -731,14 +730,14 @@ fun TodayScreen(
                         TaskSectionHeader(
                             title = t("section_completed"),
                             count = completedTasks.size,
-                            isAccent = false
+                            isAccent = false,
                         )
                     }
 
                     items(
                         items = completedTasks,
-                        key = { it.task.id },
-                        contentType = { "task_row" }
+                        key = { (t) -> t.id },
+                        contentType = { (_) -> "task_row" },
                     ) { item ->
                         TaskRowItem(
                             item = item,
@@ -746,7 +745,7 @@ fun TodayScreen(
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
                             onStartTimer = { task -> activeTimerTask = task },
-                            isReadOnly = !isViewingToday
+                            isReadOnly = !isViewingToday,
                         )
                     }
                 }
@@ -757,14 +756,14 @@ fun TodayScreen(
                         TaskSectionHeader(
                             title = t("section_not_due"),
                             count = notDueTasks.size,
-                            isAccent = false
+                            isAccent = false,
                         )
                     }
 
                     items(
                         items = notDueTasks,
-                        key = { it.task.id },
-                        contentType = { "task_row" }
+                        key = { (t) -> t.id },
+                        contentType = { (_) -> "task_row" },
                     ) { item ->
                         TaskRowItem(
                             item = item,
@@ -772,7 +771,7 @@ fun TodayScreen(
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
                             onStartTimer = { task -> activeTimerTask = task },
-                            isReadOnly = !isViewingToday
+                            isReadOnly = !isViewingToday,
                         )
                     }
                 }
@@ -790,12 +789,12 @@ fun TodayScreen(
                     .testTag("add_task_fab"),
                 containerColor = accentColor,
                 contentColor = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
-                shape = CircleShape
+                shape = CircleShape,
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = t("add_habit"),
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }
@@ -808,7 +807,7 @@ fun TodayScreen(
             headingFont = headingFont,
             bodyFont = bodyFont,
             language = language,
-            onDismiss = { showCelebration = false }
+            onDismiss = { showCelebration = false },
         )
 
         // Focus Timer Sheet
@@ -820,12 +819,11 @@ fun TodayScreen(
                 bodyFont = bodyFont,
                 language = language,
                 onDismiss = { activeTimerTask = null },
-                onCompleted = {
-                    val tId = timerTask.id
-                    activeTimerTask = null
-                    onToggleTask(tId)
-                }
-            )
+            ) {
+                val tId = timerTask.id
+                activeTimerTask = null
+                onToggleTask(tId)
+            }
         }
 
         // Streak Freeze / Vacation Mode Dialog
@@ -836,11 +834,10 @@ fun TodayScreen(
                 bodyFont = bodyFont,
                 language = language,
                 onDismiss = { showFreezeDialog = false },
-                onConfirmFreeze = { start, end, type, note ->
-                    viewModel.activateStreakFreeze(start, end, type, note)
-                    Toast.makeText(context, t("freeze_activated_toast"), Toast.LENGTH_SHORT).show()
-                }
-            )
+            ) { start, end, type, note ->
+                viewModel.activateStreakFreeze(start, end, type, note)
+                Toast.makeText(context, t("freeze_activated_toast"), Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
@@ -854,24 +851,20 @@ private fun DateStripItem(
     dateKey: String,
     isSelected: Boolean,
     isToday: Boolean,
-    hasCompletions: Boolean,
+    isStreakMet: Boolean,
     language: AppLanguage,
     accentColor: Color,
     onSelectDate: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val dayOfWeek = remember(dateKey, language) { DateUtils.getDayOfWeek(dateKey, language) }
     val dayNumber = remember(dateKey) { DateUtils.getDayNumber(dateKey) }
     val bg = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
-    val borderClr = if (isSelected) accentColor else MaterialTheme.colorScheme.outline
+    val borderClr = if (isSelected) accentColor else if (isToday) accentColor.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline
     val borderWidth = if (isSelected) 1.5.dp else 1.dp
     val textColor = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
     val numberColor = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-    val dotColor = when {
-        hasCompletions -> accentColor
-        isToday -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> Color.Transparent
-    }
+    val dotColor = if (isStreakMet) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
 
     Column(
         modifier = modifier
@@ -880,25 +873,25 @@ private fun DateStripItem(
             .border(borderWidth, borderClr, com.example.ui.components.ShapeCardSmall)
             .clickable { onSelectDate(dateKey) }
             .padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = dayOfWeek,
             style = MaterialTheme.typography.labelSmall,
-            color = textColor
+            color = textColor,
         )
         Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = dayNumber,
             style = MaterialTheme.typography.titleMedium,
-            color = numberColor
+            color = numberColor,
         )
         Spacer(modifier = Modifier.height(3.dp))
         Box(
             modifier = Modifier
                 .size(4.dp)
                 .clip(CircleShape)
-                .background(dotColor)
+                .background(dotColor),
         )
     }
 }
@@ -907,11 +900,11 @@ private fun DateStripItem(
 fun TaskRowItem(
     item: TaskWithCompletion,
     onToggle: (Long) -> Unit,
-    onIncrement: (Long, Int) -> Unit = { _, _ -> },
     onEdit: (DailyTask) -> Unit,
-    onStartTimer: (DailyTask) -> Unit = {},
+    modifier: Modifier = Modifier,
+    onIncrement: (Long, Int) -> Unit = { _, _ -> },
+    onStartTimer: ((DailyTask) -> Unit)? = null,
     isReadOnly: Boolean = false,
-    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val accentColor = LocalAccentColor.current
@@ -926,7 +919,7 @@ fun TaskRowItem(
         "WEEKLY" -> item.isWeeklyGoalMet
         else -> false
     }
-    val isWeeklyOptional = !isDone && item.task.frequencyType == "WEEKLY" && !item.isWeeklyGoalMet && !item.isMandatoryToday
+    val isWeeklyOptional = !isDone && (item.task.frequencyType == "WEEKLY") && !item.isWeeklyGoalMet && !item.isMandatoryToday
     val isOpenDue = !isDone && !isNotDue && !isWeeklyOptional
 
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
@@ -971,8 +964,8 @@ fun TaskRowItem(
                 { Toast.makeText(context, notDueToastMsg, Toast.LENGTH_SHORT).show() }
             }
             item.task.isCounter -> null
-            item.task.durationMinutes > 0 && !item.isCompleted -> {
-                { onStartTimer(item.task) }
+            (item.task.durationMinutes > 0) && !item.isCompleted -> {
+                { onStartTimer?.invoke(item.task) }
             }
             else -> {
                 { onToggle(item.task.id) }
@@ -982,8 +975,8 @@ fun TaskRowItem(
 
     val onCheckboxClick = remember(item.task, item.isCompleted, onToggle, onStartTimer) {
         {
-            if (item.task.durationMinutes > 0 && !item.isCompleted) {
-                onStartTimer(item.task)
+            if ((item.task.durationMinutes > 0) && !item.isCompleted) {
+                onStartTimer?.invoke(item.task)
             } else {
                 onToggle(item.task.id)
             }
@@ -1036,7 +1029,7 @@ fun TaskRowItem(
     }
 
     val reminderText = remember(item.task.reminderEnabled, item.task.reminderHour, item.task.reminderMinute) {
-        if (item.task.reminderEnabled && item.task.reminderHour != null && item.task.reminderMinute != null) {
+        if (item.task.reminderEnabled && (item.task.reminderHour != null) && (item.task.reminderMinute != null)) {
             DateUtils.formatTime(item.task.reminderHour, item.task.reminderMinute)
         } else null
     }
@@ -1046,16 +1039,16 @@ fun TaskRowItem(
         shape = com.example.ui.components.ShapeCardMedium,
         backgroundColor = cardBg,
         borderColor = cardBorder,
-        onClick = cardClickAction
+        onClick = cardClickAction,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Checkbox, Counter Progress Circle, or Calm Rest Day Icon (Moon)
                 if (isNotDue) {
@@ -1069,13 +1062,13 @@ fun TaskRowItem(
                                 Toast.makeText(context, notDueToastMsg, Toast.LENGTH_SHORT).show()
                             }
                             .testTag("rest_moon_${item.task.id}"),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Bedtime,
                             contentDescription = t("section_not_due"),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(15.dp),
                         )
                     }
                 } else if (!item.task.isCounter) {
@@ -1084,7 +1077,7 @@ fun TaskRowItem(
                         onCheckedChange = { onCheckboxClick() },
                         enabled = !isReadOnly,
                         size = 28.dp,
-                        testTag = "checkbox_${item.task.id}"
+                        testTag = "checkbox_${item.task.id}",
                     )
                 } else {
                     Box(
@@ -1094,22 +1087,22 @@ fun TaskRowItem(
                             .background(
                                 if (item.isCompleted) accentColor
                                 else MaterialTheme.colorScheme.surfaceVariant,
-                                CircleShape
+                                CircleShape,
                             )
                             .border(
                                 width = if (item.isCompleted) 0.dp else 1.5.dp,
                                 color = if (item.isCompleted) Color.Transparent else if (isOpenDue) accentColor.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline,
-                                shape = CircleShape
+                                shape = CircleShape,
                             )
                             .then(if (isReadOnly) Modifier else Modifier.clickable(onClick = onToggleItem)),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         if (item.isCompleted) {
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
                                 tint = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(16.dp),
                             )
                         } else {
                             val pct = if (item.task.targetCount > 0) {
@@ -1119,9 +1112,9 @@ fun TaskRowItem(
                                 text = "$pct%",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
                                 ),
-                                color = accentColor
+                                color = accentColor,
                             )
                         }
                     }
@@ -1133,7 +1126,7 @@ fun TaskRowItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Icon(
                             imageVector = TaskIcons.getIcon(item.task.iconName),
@@ -1143,7 +1136,7 @@ fun TaskRowItem(
                                 isNotDue -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 else -> accentColor
                             },
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
                         )
                         Text(
                             text = item.task.title,
@@ -1151,7 +1144,7 @@ fun TaskRowItem(
                                 fontFamily = bodyFont,
                                 fontSize = 16.sp,
                                 fontWeight = if (isOpenDue) FontWeight.SemiBold else FontWeight.Normal,
-                                textDecoration = if (item.isCompleted) TextDecoration.LineThrough else TextDecoration.None
+                                textDecoration = if (item.isCompleted) TextDecoration.LineThrough else TextDecoration.None,
                             ),
                             color = when {
                                 item.isCompleted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
@@ -1159,7 +1152,7 @@ fun TaskRowItem(
                                 else -> MaterialTheme.colorScheme.onSurface
                             },
                             maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
 
@@ -1173,40 +1166,40 @@ fun TaskRowItem(
                         isWeeklyGoalMet = item.isWeeklyGoalMet,
                         isCompleted = item.isCompleted,
                         counterText = counterText,
-                        durationText = durationText,
                         reminderText = reminderText,
-                        accentColor = accentColor
+                        accentColor = accentColor,
+                        durationText = durationText,
                     )
                 }
 
                 // Focus Timer trigger button
-                if (item.task.durationMinutes > 0 && !isReadOnly && !item.isCompleted) {
+                if ((item.task.durationMinutes > 0) && !isReadOnly && !item.isCompleted) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .border(1.dp, accentColor, RoundedCornerShape(8.dp))
                             .background(accentColor.copy(alpha = 0.15f))
-                            .clickable { onStartTimer(item.task) }
+                            .clickable { onStartTimer?.invoke(item.task) }
                             .padding(horizontal = 8.dp, vertical = 5.dp),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = "Start Timer",
                                 tint = accentColor,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(13.dp),
                             )
                             Text(
                                 text = "${item.task.durationMinutes}m",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
                                 ),
-                                color = accentColor
+                                color = accentColor,
                             )
                         }
                     }
@@ -1217,13 +1210,13 @@ fun TaskRowItem(
                 if (!isReadOnly) {
                     IconButton(
                         onClick = onEditItem,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                 }
@@ -1240,7 +1233,7 @@ fun TaskRowItem(
                     isNotDue = isNotDue,
                     pastDayTag = t("past_day_tag"),
                     accentColor = accentColor,
-                    onIncrement = onIncrement
+                    onIncrement = onIncrement,
                 )
             }
         }
@@ -1256,62 +1249,62 @@ fun TaskPillsSection(
     isWeeklyGoalMet: Boolean,
     isCompleted: Boolean,
     counterText: String?,
-    durationText: String? = null,
     reminderText: String?,
     accentColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    durationText: String? = null,
 ) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth(),
     ) {
         // Category pill
         NothingPill(text = categoryText, isAccent = isOpenDue)
 
         // Frequency pill
-        if (frequencyText != null) {
+        frequencyText?.let {
             NothingPill(
-                text = frequencyText,
-                isAccent = isWeeklyGoalMet || isCompleted || isOpenDue
+                text = it,
+                isAccent = isWeeklyGoalMet || isCompleted || isOpenDue,
             )
         }
 
-        if (counterText != null) {
+        counterText?.let {
             NothingPill(
-                text = counterText,
-                isAccent = isCompleted
+                text = it,
+                isAccent = isCompleted,
             )
         }
 
-        if (durationText != null) {
+        durationText?.let {
             NothingPill(
-                text = durationText,
+                text = it,
                 isAccent = isOpenDue,
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Timer,
                         contentDescription = null,
                         tint = if (isOpenDue) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(12.dp),
                     )
-                }
+                },
             )
         }
 
         // Reminder time pill at the bottom with other pills
-        if (reminderText != null) {
+        reminderText?.let {
             NothingPill(
-                text = reminderText,
+                text = it,
                 isAccent = isOpenDue,
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Alarm,
                         contentDescription = null,
                         tint = if (isOpenDue) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(12.dp),
                     )
-                }
+                },
             )
         }
     }
@@ -1328,7 +1321,7 @@ fun CounterProgressSection(
     pastDayTag: String,
     accentColor: Color,
     onIncrement: (Long, Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(10.dp))
@@ -1342,7 +1335,7 @@ fun CounterProgressSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(5.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, com.example.ui.components.ShapeBox6)
+                .background(MaterialTheme.colorScheme.surfaceVariant, com.example.ui.components.ShapeBox6),
         ) {
             Box(
                 modifier = Modifier
@@ -1350,8 +1343,8 @@ fun CounterProgressSection(
                     .height(5.dp)
                     .background(
                         if (isCompleted) accentColor else accentColor.copy(alpha = 0.8f),
-                        com.example.ui.components.ShapeBox6
-                    )
+                        com.example.ui.components.ShapeBox6,
+                    ),
             )
         }
 
@@ -1362,67 +1355,67 @@ fun CounterProgressSection(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 NothingPill(
                     text = pastDayTag,
-                    isAccent = false
+                    isAccent = false,
                 )
             }
         } else if (!isNotDue) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 val canDecrement = count > 0
                 val isLargeTarget = targetCount >= 50
 
                 // Decrement button: always stays in place so UI doesn't jump and user cannot miss-click
                 val primaryDecStep = if (isLargeTarget) -10 else -1
-                val decLabel = if (isLargeTarget && count in 1..9) "-1" else if (primaryDecStep == -10) "-10" else "-1"
-                val decValue = if (isLargeTarget && count in 1..9) -1 else primaryDecStep
+                val decLabel = if (isLargeTarget && (count in (1..9))) "-1" else if (primaryDecStep == -10) "-10" else "-1"
+                val decValue = if (isLargeTarget && (count in (1..9))) -1 else primaryDecStep
 
                 Box(
                     modifier = Modifier
                         .background(
                             if (canDecrement) MaterialTheme.colorScheme.surfaceVariant
                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                            com.example.ui.components.ShapeBox8
+                            com.example.ui.components.ShapeBox8,
                         )
                         .clickable(enabled = canDecrement) {
                             if (canDecrement) {
                                 onIncrement(taskId, decValue)
                             }
                         }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                 ) {
                     Text(
                         text = decLabel,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
                         ),
                         color = if (canDecrement) MaterialTheme.colorScheme.onSurfaceVariant
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                     )
                 }
 
                 // For large targets, provide an additional fine-grained -1 button when count >= 10
-                if (isLargeTarget && count >= 10) {
+                if (isLargeTarget && (count >= 10)) {
                     Box(
                         modifier = Modifier
                             .background(MaterialTheme.colorScheme.surfaceVariant, com.example.ui.components.ShapeBox8)
                             .clickable { onIncrement(taskId, -1) }
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                     ) {
                         Text(
                             text = "-1",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -1442,15 +1435,15 @@ fun CounterProgressSection(
                             .background(accentColor.copy(alpha = 0.12f), com.example.ui.components.ShapeBox8)
                             .border(1.dp, accentColor.copy(alpha = 0.5f), com.example.ui.components.ShapeBox8)
                             .clickable { onIncrement(taskId, step) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                     ) {
                         Text(
                             text = "+$step",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             ),
-                            color = accentColor
+                            color = accentColor,
                         )
                     }
                 }

@@ -1,5 +1,6 @@
 package com.example.data
 
+import android.annotation.SuppressLint
 import android.content.Context
 import com.example.util.DateUtils
 import com.example.widget.DailyWidgetProvider
@@ -9,9 +10,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
+@Suppress("DestructuringDeclaration")
 class DailyRepository(
     private val dao: DailyTaskDao,
-    private val context: Context
+    private val context: Context,
 ) {
 
     fun getTasksWithCompletions(dateKey: String): Flow<List<TaskWithCompletion>> {
@@ -21,11 +23,11 @@ class DailyRepository(
             dao.getAllActiveTasksFlow(),
             dao.getCompletionsForDateFlow(dateKey),
             dao.getCompletionsForDateKeysFlow(weekDays),
-            dao.getAllCompletionsFlow()
+            dao.getAllCompletionsFlow(),
         ) { tasks, todayCompletions, weekCompletions, allCompletions ->
-            val completedMapToday = todayCompletions.associateBy { it.taskId }
-            val relevantTasks = tasks.filter { task ->
-                DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, dateKey) || completedMapToday.containsKey(task.id)
+            val completedMapToday = todayCompletions.associateBy { (_, taskId) -> taskId }
+            val relevantTasks = tasks.filter { (id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, createdAt) ->
+                DateUtils.wasTaskCreatedOnOrBefore(createdAt, dateKey) || completedMapToday.containsKey(id)
             }
 
             relevantTasks.map { task ->
@@ -34,7 +36,7 @@ class DailyRepository(
                     dateKey = dateKey,
                     todayCompletions = todayCompletions,
                     weekCompletions = weekCompletions,
-                    allCompletions = allCompletions
+                    allCompletions = allCompletions,
                 )
             }
         }.flowOn(Dispatchers.Default)
@@ -47,9 +49,9 @@ class DailyRepository(
         val weekCompletions = dao.getCompletionsForDateKeysSync(weekDays)
         val allCompletions = dao.getAllCompletionsSync()
 
-        val completedMapToday = todayCompletions.associateBy { it.taskId }
-        val relevantTasks = tasks.filter { task ->
-            DateUtils.wasTaskCreatedOnOrBefore(task.createdAt, dateKey) || completedMapToday.containsKey(task.id)
+        val completedMapToday = todayCompletions.associateBy { (_, taskId) -> taskId }
+        val relevantTasks = tasks.filter { (id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, createdAt) ->
+            DateUtils.wasTaskCreatedOnOrBefore(createdAt, dateKey) || completedMapToday.containsKey(id)
         }
 
         return relevantTasks.map { task ->
@@ -58,17 +60,20 @@ class DailyRepository(
                 dateKey = dateKey,
                 todayCompletions = todayCompletions,
                 weekCompletions = weekCompletions,
-                allCompletions = allCompletions
+                allCompletions = allCompletions,
             )
         }
     }
 
     fun getAllActiveTasks(): Flow<List<DailyTask>> = dao.getAllActiveTasksFlow()
+    @Suppress("unused")
     fun getAllActiveTasksFlow(): Flow<List<DailyTask>> = dao.getAllActiveTasksFlow()
 
     fun getAllTasks(): Flow<List<DailyTask>> = dao.getAllTasksFlow()
+    @Suppress("unused")
     fun getAllTasksFlow(): Flow<List<DailyTask>> = dao.getAllTasksFlow()
 
+    @Suppress("unused")
     suspend fun getTaskById(id: Long): DailyTask? = dao.getTaskById(id)
     fun getTaskByIdSync(id: Long): DailyTask? = dao.getTaskByIdSync(id)
 
@@ -90,8 +95,9 @@ class DailyRepository(
             }
         } else if (task?.frequencyType == "INTERVAL") {
             val allCompletions = dao.getAllCompletionsSync()
-            val lastComp = allCompletions.filter { it.taskId == taskId && (if (task.isCounter) it.count >= task.targetCount else it.count > 0) && it.dateKey < dateKey }
-                .maxOfOrNull { it.dateKey } ?: task.intervalAnchorDate.ifBlank { null }
+            val lastComp = allCompletions.asSequence().filter { (_, tId, dKey, count) ->
+                (tId == taskId) && (if (task.isCounter) count >= task.targetCount else count > 0) && (dKey < dateKey)
+            }.maxOfOrNull { (_, _, dKey) -> dKey } ?: task.intervalAnchorDate.ifBlank { null }
             val isDue = DateUtils.isIntervalTaskDue(task.intervalDays, task.intervalAnchorDate, lastComp, dateKey)
             if (!isDue) {
                 if (existing != null) {
@@ -102,30 +108,29 @@ class DailyRepository(
             }
         }
 
-        val isNowCompleted: Boolean
-        if (task?.isCounter == true) {
+        val isNowCompleted: Boolean = if (task?.isCounter == true) {
             // For counter task, toggling marks full target or resets to 0
-            if (existing != null && existing.count >= task.targetCount) {
+            if ((existing != null) && (existing.count >= task.targetCount)) {
                 dao.deleteCompletion(taskId, dateKey)
-                isNowCompleted = false
+                false
             } else {
                 dao.insertCompletion(
                     TaskCompletion(
                         id = existing?.id ?: 0,
                         taskId = taskId,
                         dateKey = dateKey,
-                        count = task.targetCount
-                    )
+                        count = task.targetCount,
+                    ),
                 )
-                isNowCompleted = true
+                true
             }
         } else {
             if (existing != null) {
                 dao.deleteCompletion(taskId, dateKey)
-                isNowCompleted = false
+                false
             } else {
                 dao.insertCompletion(TaskCompletion(taskId = taskId, dateKey = dateKey, count = 1))
-                isNowCompleted = true
+                true
             }
         }
         if (isNowCompleted) {
@@ -146,7 +151,7 @@ class DailyRepository(
             val isoDay = DateUtils.getIsoDayOfWeek(dateKey)
             val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
             if (!allowed.contains(isoDay)) {
-                if (amount < 0 && current > 0) {
+                if ((amount < 0) && (current > 0)) {
                     val newCount = (current + amount).coerceAtLeast(0)
                     if (newCount == 0) dao.deleteCompletion(taskId, dateKey)
                     else dao.insertCompletion(TaskCompletion(id = existing?.id ?: 0, taskId = taskId, dateKey = dateKey, count = newCount))
@@ -157,11 +162,12 @@ class DailyRepository(
             }
         } else if (task.frequencyType == "INTERVAL") {
             val allCompletions = dao.getAllCompletionsSync()
-            val lastComp = allCompletions.filter { it.taskId == taskId && (if (task.isCounter) it.count >= task.targetCount else it.count > 0) && it.dateKey < dateKey }
-                .maxOfOrNull { it.dateKey } ?: task.intervalAnchorDate.ifBlank { null }
+            val lastComp = allCompletions.asSequence().filter { (_, tId, dKey, count) ->
+                (tId == taskId) && (if (task.isCounter) count >= task.targetCount else count > 0) && (dKey < dateKey)
+            }.maxOfOrNull { (_, _, dKey) -> dKey } ?: task.intervalAnchorDate.ifBlank { null }
             val isDue = DateUtils.isIntervalTaskDue(task.intervalDays, task.intervalAnchorDate, lastComp, dateKey)
             if (!isDue) {
-                if (amount < 0 && current > 0) {
+                if ((amount < 0) && (current > 0)) {
                     val newCount = (current + amount).coerceAtLeast(0)
                     if (newCount == 0) dao.deleteCompletion(taskId, dateKey)
                     else dao.insertCompletion(TaskCompletion(id = existing?.id ?: 0, taskId = taskId, dateKey = dateKey, count = newCount))
@@ -172,7 +178,7 @@ class DailyRepository(
             }
         }
 
-        if (amount < 0 && current == 0) {
+        if ((amount < 0) && (current == 0)) {
             return@withContext 0
         }
         val newCount = (current + amount).coerceAtLeast(0)
@@ -184,11 +190,11 @@ class DailyRepository(
                     id = existing?.id ?: 0,
                     taskId = taskId,
                     dateKey = dateKey,
-                    count = newCount
-                )
+                    count = newCount,
+                ),
             )
         }
-        if (task.isCounter && newCount >= task.targetCount) {
+        if (task.isCounter && (newCount >= task.targetCount)) {
             com.example.reminder.ReminderManager.cancelTaskSnooze(context, taskId)
         }
         DailyWidgetProvider.notifyDataChanged(context)
@@ -203,7 +209,7 @@ class DailyRepository(
         if (task?.frequencyType == "WEEKDAYS") {
             val isoDay = DateUtils.getIsoDayOfWeek(dateKey)
             val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-            if (!allowed.contains(isoDay) && clampedCount > 0) {
+            if (!allowed.contains(isoDay) && (clampedCount > 0)) {
                 return@withContext existing?.count ?: 0
             }
         }
@@ -216,11 +222,11 @@ class DailyRepository(
                     id = existing?.id ?: 0,
                     taskId = taskId,
                     dateKey = dateKey,
-                    count = clampedCount
-                )
+                    count = clampedCount,
+                ),
             )
         }
-        if (task != null && task.isCounter && clampedCount >= task.targetCount) {
+        if ((task != null) && task.isCounter && (clampedCount >= task.targetCount)) {
             com.example.reminder.ReminderManager.cancelTaskSnooze(context, taskId)
         }
         DailyWidgetProvider.notifyDataChanged(context)
@@ -244,6 +250,7 @@ class DailyRepository(
         DailyWidgetProvider.notifyDataChanged(context)
     }
 
+    @Suppress("unused")
     suspend fun deleteTaskById(id: Long) = withContext(Dispatchers.IO) {
         dao.deleteAllCompletionsForTask(id)
         dao.deleteTaskById(id)
@@ -261,7 +268,7 @@ class DailyRepository(
                     reminderEnabled = true,
                     iconName = "pill",
                     orderIndex = 0,
-                    createdAt = 0L
+                    createdAt = 0L,
                 ),
                 DailyTask(
                     title = "1.5L Wasser bis Mittag",
@@ -271,7 +278,7 @@ class DailyRepository(
                     reminderEnabled = true,
                     iconName = "water",
                     orderIndex = 1,
-                    createdAt = 0L
+                    createdAt = 0L,
                 ),
                 DailyTask(
                     title = "20 Min Fokus-Lesen",
@@ -282,7 +289,7 @@ class DailyRepository(
                     iconName = "book",
                     durationMinutes = 20,
                     orderIndex = 2,
-                    createdAt = 0L
+                    createdAt = 0L,
                 ),
                 DailyTask(
                     title = "Magnesium vor dem Schlafen",
@@ -292,7 +299,7 @@ class DailyRepository(
                     reminderEnabled = true,
                     iconName = "pill",
                     orderIndex = 3,
-                    createdAt = 0L
+                    createdAt = 0L,
                 ),
                 DailyTask(
                     title = "100 Liegestütze",
@@ -305,8 +312,8 @@ class DailyRepository(
                     isCounter = true,
                     targetCount = 100,
                     unit = "Wdh.",
-                    createdAt = 0L
-                )
+                    createdAt = 0L,
+                ),
             )
             defaults.forEach { dao.insertTask(it) }
             DailyWidgetProvider.notifyDataChanged(context)
@@ -315,7 +322,7 @@ class DailyRepository(
             val existingTasks = dao.getAllTasksSync()
             var changed = false
             for (t in existingTasks) {
-                if (t.title.contains("Fokus-Lesen", ignoreCase = true) && t.durationMinutes == 0) {
+                if (t.title.contains("Fokus-Lesen", ignoreCase = true) && (t.durationMinutes == 0)) {
                     dao.updateTask(t.copy(durationMinutes = 20))
                     changed = true
                 }
@@ -420,7 +427,7 @@ class DailyRepository(
                     intervalDays = obj.optInt("intervalDays", 1),
                     intervalAnchorDate = obj.optString("intervalAnchorDate", ""),
                     durationMinutes = obj.optInt("durationMinutes", 0),
-                    createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                 )
                 val newId = dao.insertTask(task)
                 if (oldId != 0L) {
@@ -437,7 +444,7 @@ class DailyRepository(
                     taskId = newTaskId,
                     dateKey = obj.getString("dateKey"),
                     count = obj.optInt("count", 1),
-                    completedAt = obj.optLong("completedAt", System.currentTimeMillis())
+                    completedAt = obj.optLong("completedAt", System.currentTimeMillis()),
                 )
                 dao.insertCompletion(comp)
             }
@@ -451,7 +458,7 @@ class DailyRepository(
                         endDate = obj.getString("endDate"),
                         type = obj.optString("type", "SICKNESS"),
                         note = obj.optString("note", ""),
-                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                     )
                     dao.insertStreakFreeze(freeze)
                 }
@@ -466,6 +473,7 @@ class DailyRepository(
         }
     }
 
+    @Suppress("unused")
     fun getRecentCompletions(startDateKey: String): Flow<List<TaskCompletion>> {
         return dao.getRecentCompletionsFlow(startDateKey)
     }
@@ -474,6 +482,7 @@ class DailyRepository(
         return dao.getAllCompletionsFlow()
     }
 
+    @Suppress("unused")
     fun getAllCompletionsFlow(): Flow<List<TaskCompletion>> {
         return dao.getAllCompletionsFlow()
     }
@@ -485,7 +494,9 @@ class DailyRepository(
     // Streak Freezes
     fun getAllStreakFreezesFlow(): Flow<List<StreakFreeze>> = dao.getAllStreakFreezesFlow()
     fun getAllStreakFreezesSync(): List<StreakFreeze> = dao.getAllStreakFreezesSync()
+    @Suppress("unused")
     fun getActiveFreezeForDateFlow(dateKey: String): Flow<StreakFreeze?> = dao.getActiveFreezeForDateFlow(dateKey)
+    @Suppress("unused")
     suspend fun getActiveFreezeForDate(dateKey: String): StreakFreeze? = dao.getActiveFreezeForDate(dateKey)
     suspend fun insertStreakFreeze(freeze: StreakFreeze): Long {
         val id = dao.insertStreakFreeze(freeze)
@@ -504,7 +515,7 @@ class DailyRepository(
     fun getFullyCompletedDates(): Flow<List<String>> {
         return combine(
             dao.getAllActiveTasksFlow(),
-            dao.getAllCompletionsFlow()
+            dao.getAllCompletionsFlow(),
         ) { tasks, allCompletions ->
             calculateFullyCompletedDates(tasks, allCompletions)
         }.flowOn(Dispatchers.Default)
@@ -518,7 +529,7 @@ class DailyRepository(
 
     private fun calculateFullyCompletedDates(
         tasks: List<DailyTask>,
-        allCompletions: List<TaskCompletion>
+        allCompletions: List<TaskCompletion>,
     ): List<String> {
         if (tasks.isEmpty() || allCompletions.isEmpty()) return emptyList()
 
@@ -527,7 +538,7 @@ class DailyRepository(
 
         val todayKey = DateUtils.getTodayKey()
         val earliestCompDate = allCompletions.minByOrNull { it.dateKey }?.dateKey ?: todayKey
-        val earliestTaskDate = tasks.map { DateUtils.getDateKeyFromMillis(it.createdAt) }.minOrNull() ?: todayKey
+        val earliestTaskDate = tasks.minOfOrNull { DateUtils.getDateKeyFromMillis(it.createdAt) } ?: todayKey
         val startDate = minOf(earliestCompDate, earliestTaskDate)
 
         var checkDate = startDate
@@ -571,7 +582,7 @@ class DailyRepository(
                         dateKey = checkDate,
                         weeklyCompletedCount = weeklyCompletedCount,
                         isCompletedOnDate = isDoneToday,
-                        createdAtMillis = task.createdAt
+                        createdAtMillis = task.createdAt,
                     )
                 }
 
@@ -594,15 +605,11 @@ class DailyRepository(
                         fullyCompletedDates.add(checkDate)
                     } else {
                         val weeklyTasks = relevantTasks.filter { it.frequencyType == "WEEKLY" }
-                        val weeklyGoalsSatisfied = if (isPastWeek && weeklyTasks.isNotEmpty()) {
-                            weeklyTasks.all { task ->
-                                val weekList = weekCompletionsByTask[task.id] ?: emptyList()
-                                val count = weekList.count { if (task.isCounter) it.count >= task.targetCount else it.count > 0 }
-                                val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, checkDate)
-                                count >= effectiveTarget
-                            }
-                        } else {
-                            true
+                        val weeklyGoalsSatisfied = (!isPastWeek) || weeklyTasks.isEmpty() || weeklyTasks.all { task ->
+                            val weekList = weekCompletionsByTask[task.id] ?: emptyList()
+                            val count = weekList.count { if (task.isCounter) it.count >= task.targetCount else it.count > 0 }
+                            val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(task.targetDaysPerWeek, task.createdAt, checkDate)
+                            count >= effectiveTarget
                         }
                         if (weeklyGoalsSatisfied) {
                             fullyCompletedDates.add(checkDate)
@@ -626,6 +633,7 @@ class DailyRepository(
     }
 
     companion object {
+        @SuppressLint("StaticFieldLeak")
         @Volatile
         private var instance: DailyRepository? = null
 

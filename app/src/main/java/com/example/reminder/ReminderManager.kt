@@ -12,6 +12,7 @@ import android.os.Build
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.createBitmap
 import com.example.MainActivity
 import com.example.R
 import com.example.data.DailyDatabase
@@ -38,11 +39,10 @@ object ReminderManager {
     private const val TASK_SNOOZE_REQUEST_CODE_OFFSET = 500000
 
     private fun canPostNotifications(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
-        return ContextCompat.checkSelfPermission(
+        return (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) || (ContextCompat.checkSelfPermission(
             context,
-            android.Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
+            android.Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED)
     }
 
     private fun scheduleAlarm(alarmManager: AlarmManager, triggerAtMillis: Long, pendingIntent: PendingIntent) {
@@ -52,27 +52,27 @@ object ReminderManager {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         triggerAtMillis,
-                        pendingIntent
+                        pendingIntent,
                     )
                 } else {
                     alarmManager.setAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         triggerAtMillis,
-                        pendingIntent
+                        pendingIntent,
                     )
                 }
             } else {
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     triggerAtMillis,
-                    pendingIntent
+                    pendingIntent,
                 )
             }
         } catch (_: Exception) {
-            alarmManager.set(
+            alarmManager.setAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 triggerAtMillis,
-                pendingIntent
+                pendingIntent,
             )
         }
     }
@@ -95,7 +95,7 @@ object ReminderManager {
     }
 
     fun scheduleReminder(context: Context, task: DailyTask) {
-        if (!task.reminderEnabled || task.reminderHour == null || task.reminderMinute == null) {
+        if (!task.reminderEnabled || (task.reminderHour == null) || (task.reminderMinute == null)) {
             cancelReminder(context, task.id)
             return
         }
@@ -108,7 +108,7 @@ object ReminderManager {
             context,
             task.id.toInt(),
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val calendar = Calendar.getInstance().apply {
@@ -131,7 +131,7 @@ object ReminderManager {
             context,
             taskId.toInt(),
             intent,
-            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
         )
         if (pendingIntent != null) {
             alarmManager.cancel(pendingIntent)
@@ -151,7 +151,7 @@ object ReminderManager {
             scheduleGeneralDailyReminder(
                 context,
                 appSettings.generalReminderHour.value,
-                appSettings.generalReminderMinute.value
+                appSettings.generalReminderMinute.value,
             )
         }
     }
@@ -170,7 +170,7 @@ object ReminderManager {
             context,
             task.id.toInt(),
             openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val completeIntent = Intent(context, QuickActionReceiver::class.java).apply {
@@ -182,7 +182,7 @@ object ReminderManager {
             context,
             task.id.toInt() + 20000,
             completeIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val snooze10PendingIntent = createSnoozeTaskPendingIntent(
@@ -190,25 +190,24 @@ object ReminderManager {
             taskId = task.id,
             minutes = 10,
             notificationId = task.id.toInt(),
-            requestCode = task.id.toInt() + 30000
+            requestCode = task.id.toInt() + 30000,
         )
         val snooze30PendingIntent = createSnoozeTaskPendingIntent(
             context = context,
             taskId = task.id,
             minutes = 30,
             notificationId = task.id.toInt(),
-            requestCode = task.id.toInt() + 40000
+            requestCode = task.id.toInt() + 40000,
         )
         val snooze60PendingIntent = createSnoozeTaskPendingIntent(
             context = context,
             taskId = task.id,
             minutes = 60,
             notificationId = task.id.toInt(),
-            requestCode = task.id.toInt() + 50000
+            requestCode = task.id.toInt() + 50000,
         )
 
-        val rawTitle = AppStrings.get("notif_task_reminder_title", language)
-        val title = rawTitle
+        val title = AppStrings.get("notif_task_reminder_title", language)
         val baseBody = String.format(AppStrings.get("notif_task_reminder_body", language), task.title)
         val body = if (isSnoozed) {
             "$baseBody • ${AppStrings.get("notif_snoozed_indicator", language)}"
@@ -232,9 +231,7 @@ object ReminderManager {
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
 
-        if (largeAppIcon != null) {
-            notificationBuilder.setLargeIcon(largeAppIcon)
-        }
+        largeAppIcon?.let { notificationBuilder.setLargeIcon(it) }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(task.id.toInt(), notificationBuilder.build())
@@ -244,7 +241,7 @@ object ReminderManager {
         context: Context,
         incompleteCount: Int,
         totalCount: Int,
-        isSnoozed: Boolean = false
+        isSnoozed: Boolean = false,
     ) {
         if (!canPostNotifications(context)) return
 
@@ -259,7 +256,7 @@ object ReminderManager {
             context,
             GENERAL_NOTIFICATION_ID,
             openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val snooze10Intent = Intent(context, QuickActionReceiver::class.java).apply {
@@ -271,7 +268,7 @@ object ReminderManager {
             context,
             99910,
             snooze10Intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val snooze30Intent = Intent(context, QuickActionReceiver::class.java).apply {
@@ -283,7 +280,7 @@ object ReminderManager {
             context,
             99930,
             snooze30Intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val snooze60Intent = Intent(context, QuickActionReceiver::class.java).apply {
@@ -295,11 +292,10 @@ object ReminderManager {
             context,
             99960,
             snooze60Intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val rawTitle = AppStrings.get("notif_general_title", language)
-        val title = rawTitle
+        val title = AppStrings.get("notif_general_title", language)
         val baseMessage = String.format(AppStrings.get("notif_general_body", language), incompleteCount, totalCount)
         val message = if (isSnoozed) {
             "$baseMessage • ${AppStrings.get("notif_snoozed_indicator", language)}"
@@ -321,9 +317,7 @@ object ReminderManager {
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
 
-        if (largeAppIcon != null) {
-            notificationBuilder.setLargeIcon(largeAppIcon)
-        }
+        largeAppIcon?.let { notificationBuilder.setLargeIcon(it) }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(GENERAL_NOTIFICATION_ID, notificationBuilder.build())
@@ -334,7 +328,7 @@ object ReminderManager {
         taskId: Long,
         minutes: Int,
         notificationId: Int,
-        requestCode: Int
+        requestCode: Int,
     ): PendingIntent {
         val intent = Intent(context, QuickActionReceiver::class.java).apply {
             action = QuickActionReceiver.ACTION_SNOOZE_TASK
@@ -346,7 +340,7 @@ object ReminderManager {
             context,
             requestCode,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
 
@@ -361,7 +355,7 @@ object ReminderManager {
             context,
             requestCode,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         scheduleAlarm(alarmManager, System.currentTimeMillis() + (minutes * 60 * 1000L), pendingIntent)
     }
@@ -377,7 +371,7 @@ object ReminderManager {
             context,
             requestCode,
             intent,
-            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
         )
         if (pendingIntent != null) {
             alarmManager.cancel(pendingIntent)
@@ -393,7 +387,7 @@ object ReminderManager {
             context,
             GENERAL_REMINDER_REQUEST_CODE,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val calendar = Calendar.getInstance().apply {
@@ -401,7 +395,7 @@ object ReminderManager {
             set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-            if (timeInMillis <= System.currentTimeMillis() + 5000) {
+            if (timeInMillis <= (System.currentTimeMillis() + 5000)) {
                 add(Calendar.DAY_OF_YEAR, 1)
             }
         }
@@ -416,7 +410,7 @@ object ReminderManager {
             context,
             GENERAL_REMINDER_REQUEST_CODE,
             intent,
-            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
         )
         if (pendingIntent != null) {
             alarmManager.cancel(pendingIntent)
@@ -434,7 +428,7 @@ object ReminderManager {
             context,
             GENERAL_SNOOZE_REQUEST_CODE,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         scheduleAlarm(alarmManager, System.currentTimeMillis() + (minutes * 60 * 1000L), pendingIntent)
     }
@@ -448,7 +442,7 @@ object ReminderManager {
             context,
             GENERAL_SNOOZE_REQUEST_CODE,
             intent,
-            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
         )
         if (pendingIntent != null) {
             alarmManager.cancel(pendingIntent)
@@ -465,7 +459,7 @@ object ReminderManager {
             context,
             TEST_SNOOZE_REQUEST_CODE,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         scheduleAlarm(alarmManager, System.currentTimeMillis() + (minutes * 60 * 1000L), pendingIntent)
     }
@@ -483,7 +477,7 @@ object ReminderManager {
             context,
             TEST_NOTIFICATION_ID,
             openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val snooze10Intent = Intent(context, QuickActionReceiver::class.java).apply {
@@ -495,7 +489,7 @@ object ReminderManager {
             context,
             99971,
             snooze10Intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val snooze30Intent = Intent(context, QuickActionReceiver::class.java).apply {
@@ -507,7 +501,7 @@ object ReminderManager {
             context,
             99972,
             snooze30Intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val snooze60Intent = Intent(context, QuickActionReceiver::class.java).apply {
@@ -519,7 +513,7 @@ object ReminderManager {
             context,
             99973,
             snooze60Intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val title = AppStrings.get("notif_test_title", language)
@@ -538,9 +532,7 @@ object ReminderManager {
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
 
-        if (largeAppIcon != null) {
-            notificationBuilder.setLargeIcon(largeAppIcon)
-        }
+        largeAppIcon?.let { notificationBuilder.setLargeIcon(it) }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(TEST_NOTIFICATION_ID, notificationBuilder.build())
@@ -549,18 +541,18 @@ object ReminderManager {
     private fun getAppLargeIcon(context: Context): android.graphics.Bitmap? {
         return try {
             BitmapFactory.decodeResource(context.resources, R.drawable.daily_nothing_icon)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         } ?: try {
-            val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher) ?: return null
+            val drawable = ContextCompat.getDrawable(context, R.mipmap.ic_launcher) ?: return null
             val w = drawable.intrinsicWidth.takeIf { it > 0 } ?: 128
             val h = drawable.intrinsicHeight.takeIf { it > 0 } ?: 128
-            val bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
             val canvas = android.graphics.Canvas(bitmap)
             drawable.setBounds(0, 0, canvas.width, canvas.height)
             drawable.draw(canvas)
             bitmap
-        } catch (e2: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

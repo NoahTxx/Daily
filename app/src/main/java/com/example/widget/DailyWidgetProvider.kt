@@ -6,14 +6,11 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.widget.RemoteViews
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.net.toUri
 import com.example.MainActivity
 import com.example.R
-import com.example.data.DailyDatabase
-import com.example.data.TaskCompletion
-import com.example.util.AppLanguage
 import com.example.util.AppSettings
 import com.example.util.AppStrings
 import com.example.util.DateUtils
@@ -21,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+@Suppress("DEPRECATION")
 class DailyWidgetProvider : AppWidgetProvider() {
 
     companion object {
@@ -55,7 +53,7 @@ class DailyWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray
+        appWidgetIds: IntArray,
     ) {
         for (appWidgetId in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId)
@@ -66,7 +64,7 @@ class DailyWidgetProvider : AppWidgetProvider() {
     private fun updateAppWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetId: Int
+        appWidgetId: Int,
     ) {
         val views = RemoteViews(context.packageName, R.layout.daily_widget_layout)
         val appSettings = AppSettings.getInstance(context)
@@ -82,7 +80,7 @@ class DailyWidgetProvider : AppWidgetProvider() {
         // Set adapter intent for ListView with stable URI per widget
         val serviceIntent = Intent(context, DailyWidgetService::class.java).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            data = Uri.parse("daily://widget/tasks/$appWidgetId")
+            data = "daily://widget/tasks/$appWidgetId".toUri()
         }
         views.setRemoteAdapter(R.id.widget_list, serviceIntent)
         views.setEmptyView(R.id.widget_list, R.id.widget_empty_view)
@@ -95,7 +93,7 @@ class DailyWidgetProvider : AppWidgetProvider() {
             context,
             appWidgetId,
             toggleIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
         views.setPendingIntentTemplate(R.id.widget_list, togglePendingIntent)
 
@@ -107,7 +105,7 @@ class DailyWidgetProvider : AppWidgetProvider() {
             context,
             appWidgetId + 500,
             openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         views.setOnClickPendingIntent(R.id.widget_title, openAppPendingIntent)
         views.setOnClickPendingIntent(R.id.widget_progress_text, openAppPendingIntent)
@@ -118,10 +116,10 @@ class DailyWidgetProvider : AppWidgetProvider() {
                 val repository = com.example.data.DailyRepository.getInstance(context)
                 val todayKey = DateUtils.getTodayKey()
                 val tasks = repository.getTasksWithCompletionsSync(todayKey)
-                val dueOrCompletedTasks = tasks.filter { it.isDueToday || it.isCompleted }
+                val dueOrCompletedTasks = tasks.filter { (_, isCompleted, _, _, _, isDueToday) -> isDueToday || isCompleted }
 
                 val total = dueOrCompletedTasks.size
-                val done = dueOrCompletedTasks.count { it.isCompleted }
+                val done = dueOrCompletedTasks.count { (_, isCompleted) -> isCompleted }
 
                 views.setTextViewText(R.id.widget_progress_text, "$done / $total")
 

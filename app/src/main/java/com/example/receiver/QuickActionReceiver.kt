@@ -57,7 +57,7 @@ class QuickActionReceiver : BroadcastReceiver() {
                             val task = db.dailyTaskDao().getTaskById(taskId)
                             val count = if (task?.isCounter == true) task.targetCount else 1
                             db.dailyTaskDao().insertCompletion(
-                                TaskCompletion(taskId = taskId, dateKey = todayKey, count = count)
+                                TaskCompletion(taskId = taskId, dateKey = todayKey, count = count),
                             )
                             DailyWidgetProvider.notifyDataChanged(context)
                         } catch (e: Exception) {
@@ -95,7 +95,7 @@ class QuickActionReceiver : BroadcastReceiver() {
                     try {
                         val db = DailyDatabase.getInstance(context)
                         val task = db.dailyTaskDao().getTaskById(taskId)
-                        if (task != null && !task.isArchived && task.reminderEnabled) {
+                        if ((task != null) && !task.isArchived && task.reminderEnabled) {
                             val todayKey = DateUtils.getTodayKey()
                             val completion = db.dailyTaskDao().getCompletion(taskId, todayKey)
                             val isDoneToday = if (task.isCounter) {
@@ -139,38 +139,38 @@ class QuickActionReceiver : BroadcastReceiver() {
                         val weekCompletions = db.dailyTaskDao().getCompletionsForDateKeysSync(weekDays)
                         val isoDay = DateUtils.getIsoDayOfWeek(todayKey)
 
-                        val completedIdsToday = completions.filter { comp ->
-                            val task = tasks.find { it.id == comp.taskId }
-                            if (task?.isCounter == true) {
-                                comp.count >= task.targetCount
-                            } else {
-                                true
-                            }
-                        }.map { it.taskId }.toSet()
+                        val completedIdsToday = completions.asSequence().filter { (_, tId, _, c) ->
+                            val task = tasks.find { (id) -> id == tId }
+                            (task?.isCounter != true) || (c >= task.targetCount)
+                        }.map { (_, tId) -> tId }.toSet()
 
-                        val dueTasks = tasks.filter { task ->
-                            when (task.frequencyType) {
+                        val dueTasks = mutableListOf<com.example.data.DailyTask>()
+                        for (task in tasks) {
+                            val isDue = when (task.frequencyType) {
                                 "WEEKDAYS" -> {
                                     val allowed = task.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
                                     allowed.contains(isoDay)
                                 }
                                 "WEEKLY" -> {
-                                    val completedCount = weekCompletions.count {
-                                        it.taskId == task.id && (if (task.isCounter) it.count >= task.targetCount else it.count > 0)
+                                    val completedCount = weekCompletions.count { (_, tId, _, c) ->
+                                        (tId == task.id) && (if (task.isCounter) c >= task.targetCount else c > 0)
                                     }
                                     completedCount < task.targetDaysPerWeek
                                 }
                                 else -> true
                             }
+                            if (isDue) {
+                                dueTasks.add(task)
+                            }
                         }
 
-                        val incompleteCount = dueTasks.count { !completedIdsToday.contains(it.id) }
+                        val incompleteCount = dueTasks.count { (id) -> !completedIdsToday.contains(id) }
                         if (incompleteCount > 0) {
                             ReminderManager.showGeneralReminderNotification(
                                 context = context,
                                 incompleteCount = incompleteCount,
                                 totalCount = dueTasks.size,
-                                isSnoozed = true
+                                isSnoozed = true,
                             )
                         }
                     } catch (e: Exception) {

@@ -134,4 +134,62 @@ class TaskStatusCalculatorTest {
         val completedStatus = TaskStatusCalculator.evaluate(completedTask, tuesday, todayCompletions, todayCompletions, todayCompletions)
         assertTrue(completedStatus.isDueToday || completedStatus.isCompleted)
     }
+
+    @Test
+    fun testDaysBetweenAcrossDaylightSavingTimeTransition() {
+        // Test DST spring forward (2026-03-29 is European spring DST transition: 23-hour day)
+        val days1 = com.example.util.DateUtils.daysBetween("2026-03-28", "2026-03-29")
+        assertEquals(1, days1)
+
+        val days2 = com.example.util.DateUtils.daysBetween("2026-03-28", "2026-03-30")
+        assertEquals(2, days2)
+
+        // Test DST autumn fall back (2026-10-25 is European autumn DST transition: 25-hour day)
+        val days3 = com.example.util.DateUtils.daysBetween("2026-10-24", "2026-10-25")
+        assertEquals(1, days3)
+
+        val days4 = com.example.util.DateUtils.daysBetween("2026-10-24", "2026-10-26")
+        assertEquals(2, days4)
+
+        // Negative difference
+        val daysNeg = com.example.util.DateUtils.daysBetween("2026-03-29", "2026-03-28")
+        assertEquals(-1, daysNeg)
+    }
+
+    @Test
+    fun testDeterministicDaysInSameWeek() {
+        // Wednesday
+        val weekFromWed = com.example.util.DateUtils.getDaysInSameWeek("2026-10-28")
+        assertEquals(7, weekFromWed.size)
+        assertEquals("2026-10-26", weekFromWed[0]) // Monday
+        assertEquals("2026-11-01", weekFromWed[6]) // Sunday
+
+        // Sunday
+        val weekFromSun = com.example.util.DateUtils.getDaysInSameWeek("2026-11-01")
+        assertEquals(7, weekFromSun.size)
+        assertEquals("2026-10-26", weekFromSun[0]) // Monday
+        assertEquals("2026-11-01", weekFromSun[6]) // Sunday
+    }
+
+    @Test
+    fun testStreakFreezePreservesStreakInStreakCalculator() {
+        val today = com.example.util.DateUtils.getTodayKey()
+        val yesterday = com.example.util.DateUtils.addDays(today, -1)
+        val twoDaysAgo = com.example.util.DateUtils.addDays(today, -2)
+        val threeDaysAgo = com.example.util.DateUtils.addDays(today, -3)
+
+        // User completed task 3 days ago, was sick yesterday and 2 days ago (frozen)
+        val completions = listOf(threeDaysAgo)
+        val freezes = listOf(
+            com.example.data.StreakFreeze(
+                id = 1L,
+                startDate = twoDaysAgo,
+                endDate = yesterday,
+                type = "SICKNESS"
+            )
+        )
+
+        val streak = com.example.util.StreakCalculator.calculateStreak(completions, freezes)
+        assertEquals(1, streak)
+    }
 }

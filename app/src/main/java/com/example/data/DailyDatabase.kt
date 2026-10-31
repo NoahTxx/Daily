@@ -11,7 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [DailyTask::class, TaskCompletion::class, StreakFreeze::class],
     version = 7,
-    exportSchema = false
+    exportSchema = false,
 )
 abstract class DailyDatabase : RoomDatabase() {
 
@@ -23,6 +23,14 @@ abstract class DailyDatabase : RoomDatabase() {
 
         @Volatile
         private var INSTANCE: DailyDatabase? = null
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE daily_tasks ADD COLUMN isCounter INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE daily_tasks ADD COLUMN targetCount INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE daily_tasks ADD COLUMN unit TEXT NOT NULL DEFAULT ''")
+            }
+        }
 
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -47,24 +55,31 @@ abstract class DailyDatabase : RoomDatabase() {
                 db.execSQL("DROP INDEX IF EXISTS index_task_completions_dateKey")
 
                 db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_isArchived_orderIndex ON daily_tasks (isArchived, orderIndex, id)"
+                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_isArchived_orderIndex ON daily_tasks (isArchived, orderIndex, id)",
                 )
                 db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_reminderEnabled ON daily_tasks (isArchived, reminderEnabled)"
+                    "CREATE INDEX IF NOT EXISTS index_daily_tasks_reminderEnabled ON daily_tasks (isArchived, reminderEnabled)",
                 )
                 db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS index_task_completions_taskId_dateKey ON task_completions (taskId, dateKey)"
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_task_completions_taskId_dateKey ON task_completions (taskId, dateKey)",
                 )
                 db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_task_completions_dateKey ON task_completions (dateKey)"
+                    "CREATE INDEX IF NOT EXISTS index_task_completions_dateKey ON task_completions (dateKey)",
                 )
+            }
+        }
+
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_4_6.migrate(db)
             }
         }
 
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN durationMinutes INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("""
+                db.execSQL(
+                    """
                     CREATE TABLE IF NOT EXISTS streak_freezes (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                         startDate TEXT NOT NULL,
@@ -73,7 +88,8 @@ abstract class DailyDatabase : RoomDatabase() {
                         note TEXT NOT NULL DEFAULT '',
                         createdAt INTEGER NOT NULL DEFAULT 0
                     )
-                """.trimIndent())
+                    """.trimIndent(),
+                )
             }
         }
 
@@ -81,15 +97,17 @@ abstract class DailyDatabase : RoomDatabase() {
             return Room.databaseBuilder(
                 context.applicationContext,
                 DailyDatabase::class.java,
-                DB_NAME
+                DB_NAME,
             )
                 .addMigrations(
+                    MIGRATION_1_2,
                     MIGRATION_2_3,
                     MIGRATION_3_4,
                     MIGRATION_4_6,
-                    MIGRATION_6_7
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = false)
                 .build()
         }
 

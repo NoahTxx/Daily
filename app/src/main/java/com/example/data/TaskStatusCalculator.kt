@@ -8,26 +8,27 @@ object TaskStatusCalculator {
         dateKey: String,
         todayCompletions: List<TaskCompletion>,
         weekCompletions: List<TaskCompletion>,
-        allCompletions: List<TaskCompletion> = emptyList()
+        allCompletions: List<TaskCompletion> = emptyList(),
     ): TaskWithCompletion {
-        val completionToday = todayCompletions.firstOrNull { it.taskId == task.id }
+        val completionToday = todayCompletions.firstOrNull { (_, tId) -> tId == task.id }
         val countToday = completionToday?.count ?: 0
         val isCompleted = isCountSatisfied(task, countToday)
 
         val weeklyCompletedCount = weekCompletions
-            .filter { it.taskId == task.id }
-            .count { isCountSatisfied(task, it.count) }
+            .asSequence()
+            .filter { (_, tId) -> tId == task.id }
+            .count { (_, _, _, count) -> isCountSatisfied(task, count) }
 
         val effectiveTarget = DateUtils.getEffectiveWeeklyTarget(
             task.targetDaysPerWeek,
             task.createdAt,
-            dateKey
+            dateKey,
         )
 
         val lastCompletionDateKey = allCompletions
             .asSequence()
-            .filter { it.taskId == task.id && it.dateKey < dateKey && isCountSatisfied(task, it.count) }
-            .maxByOrNull { it.dateKey }
+            .filter { (_, tId, dKey, c) -> (tId == task.id) && (dKey < dateKey) && isCountSatisfied(task, c) }
+            .maxByOrNull { (_, _, dateKey) -> dateKey }
             ?.dateKey
             ?: task.intervalAnchorDate.ifBlank { null }
 
@@ -46,7 +47,7 @@ object TaskStatusCalculator {
             intervalDays = task.intervalDays,
             intervalAnchorDate = task.intervalAnchorDate,
             lastCompletionDateKey = lastCompletionDateKey,
-            createdAtMillis = task.createdAt
+            createdAtMillis = task.createdAt,
         )
 
         val isMandatoryToday = DateUtils.isTaskMandatoryOnDate(
@@ -59,7 +60,7 @@ object TaskStatusCalculator {
             dateKey = dateKey,
             weeklyCompletedCount = weeklyCompletedCount,
             isCompletedOnDate = isCompleted,
-            createdAtMillis = task.createdAt
+            createdAtMillis = task.createdAt,
         )
 
         val daysUntilDue = when (task.frequencyType) {
@@ -68,7 +69,7 @@ object TaskStatusCalculator {
                     intervalDays = task.intervalDays.coerceAtLeast(1),
                     anchorDateKey = task.intervalAnchorDate.ifBlank { dateKey },
                     lastCompletionDateKey = lastCompletionDateKey,
-                    queryDateKey = dateKey
+                    queryDateKey = dateKey,
                 ).coerceAtLeast(0)
             }
             else -> 0
@@ -84,7 +85,7 @@ object TaskStatusCalculator {
             isWeeklyGoalMet = isWeeklyGoalMet,
             isMandatoryToday = isMandatoryToday,
             daysUntilDue = daysUntilDue,
-            lastCompletionDateKey = lastCompletionDateKey
+            lastCompletionDateKey = lastCompletionDateKey,
         )
     }
 

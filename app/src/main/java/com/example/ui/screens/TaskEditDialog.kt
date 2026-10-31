@@ -72,7 +72,7 @@ fun TaskEditDialog(
     task: DailyTask?,
     onDismiss: () -> Unit,
     onSave: (DailyTask) -> Unit,
-    onDelete: ((DailyTask) -> Unit)? = null
+    onDelete: ((DailyTask) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val accentColor = LocalAccentColor.current
@@ -87,20 +87,20 @@ fun TaskEditDialog(
     var title by remember { mutableStateOf(task?.title ?: "") }
     var category by remember { mutableStateOf(task?.category ?: if (isEn) "Supplements" else "Supplements") }
     var iconName by remember { mutableStateOf(task?.iconName ?: "pill") }
-    var isCounter by remember { mutableStateOf(task?.isCounter ?: false) }
-    var isTimer by remember { mutableStateOf((task?.durationMinutes ?: 0) > 0) }
+    var isCounter by remember { mutableStateOf(value = task?.isCounter ?: false) }
+    var isTimer by remember { mutableStateOf(value = (task?.durationMinutes ?: 0) > 0) }
     var durationMinutesText by remember { mutableStateOf((if ((task?.durationMinutes ?: 0) > 0) task?.durationMinutes?.toString() else "15") ?: "15") }
     var frequencyType by remember { mutableStateOf(task?.frequencyType ?: "DAILY") }
     var targetDaysPerWeek by remember { mutableIntStateOf(task?.targetDaysPerWeek ?: 1) }
     var intervalDays by remember { mutableIntStateOf(task?.intervalDays ?: 5) }
     var intervalAnchorDate by remember { mutableStateOf(task?.intervalAnchorDate?.ifBlank { DateUtils.getTodayKey() } ?: DateUtils.getTodayKey()) }
     var selectedDaysOfWeek by remember {
-        val initialDays = (task?.daysOfWeek ?: "1,2,3,4,5,6,7").split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
-        mutableStateOf(if (initialDays.isEmpty()) setOf(1, 2, 3, 4, 5, 6, 7) else initialDays)
+        val initialDays = (task?.daysOfWeek ?: "1,2,3,4,5,6,7").split(",").asSequence().mapNotNull { it.trim().toIntOrNull() }.toSet()
+        mutableStateOf(initialDays.ifEmpty { setOf(1, 2, 3, 4, 5, 6, 7) })
     }
     var targetCountText by remember { mutableStateOf(task?.targetCount?.toString() ?: "10") }
     var unitText by remember { mutableStateOf(task?.unit ?: if (isEn) "Reps" else "Wdh.") }
-    var reminderEnabled by remember { mutableStateOf(task?.reminderEnabled ?: false) }
+    var reminderEnabled by remember { mutableStateOf(value = task?.reminderEnabled ?: false) }
     var reminderHour by remember { mutableIntStateOf(task?.reminderHour ?: 8) }
     var reminderMinute by remember { mutableIntStateOf(task?.reminderMinute ?: 0) }
 
@@ -126,49 +126,49 @@ fun TaskEditDialog(
                     .padding(vertical = 12.dp)
                     .size(width = 36.dp, height = 4.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.outline)
+                    .background(MaterialTheme.colorScheme.outline),
             )
-        }
+        },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 36.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
         ) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .clip(CircleShape)
-                            .background(accentColor)
+                            .background(accentColor),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (task == null) t("dialog_new_task") else t("dialog_edit_task"),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = headingFont,
-                            letterSpacing = 1.sp
+                            letterSpacing = 1.sp,
                         ),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
 
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = "Close",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -190,9 +190,9 @@ fun TaskEditDialog(
                     focusedBorderColor = accentColor,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                     focusedLabelColor = accentColor,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
             )
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -201,13 +201,13 @@ fun TaskEditDialog(
             Text(
                 text = t("category_label"),
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 categories.forEach { cat ->
                     val isSelected = category.equals(cat, ignoreCase = true)
@@ -217,23 +217,23 @@ fun TaskEditDialog(
                             .border(
                                 1.dp,
                                 if (isSelected) accentColor else MaterialTheme.colorScheme.outline,
-                                RoundedCornerShape(10.dp)
+                                RoundedCornerShape(10.dp),
                             )
                             .background(
                                 if (isSelected) accentColor.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.surfaceVariant
+                                else MaterialTheme.colorScheme.surfaceVariant,
                             )
                             .clickable { category = cat }
                             .padding(horizontal = 14.dp, vertical = 9.dp),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = cat.uppercase(),
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontFamily = bodyFont,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             ),
-                            color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -250,8 +250,8 @@ fun TaskEditDialog(
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = accentColor,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                )
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                ),
             )
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -260,15 +260,19 @@ fun TaskEditDialog(
             Text(
                 text = t("icon_label"),
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                items(TaskIcons.items) { item ->
-                    val isSelected = iconName.equals(item.key, ignoreCase = true)
+                items(
+                    items = TaskIcons.items,
+                    key = { (key) -> key },
+                    contentType = { (_) -> "task_icon_item" },
+                ) { (itemKey, itemIcon, labelEn, labelDe) ->
+                    val isSelected = iconName.equals(itemKey, ignoreCase = true)
                     Box(
                         modifier = Modifier
                             .size(46.dp)
@@ -276,20 +280,20 @@ fun TaskEditDialog(
                             .border(
                                 width = if (isSelected) 2.dp else 1.dp,
                                 color = if (isSelected) accentColor else MaterialTheme.colorScheme.outline,
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(12.dp),
                             )
                             .background(
                                 if (isSelected) accentColor.copy(alpha = 0.2f)
-                                else MaterialTheme.colorScheme.surfaceVariant
+                                else MaterialTheme.colorScheme.surfaceVariant,
                             )
-                            .clickable { iconName = item.key },
-                        contentAlignment = Alignment.Center
+                            .clickable { iconName = itemKey },
+                        contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            imageVector = item.icon,
-                            contentDescription = if (isEn) item.labelEn else item.labelDe,
+                            imageVector = itemIcon,
+                            contentDescription = if (isEn) labelEn else labelDe,
                             tint = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
@@ -301,18 +305,18 @@ fun TaskEditDialog(
             Text(
                 text = t("frequency_label"),
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 listOf(
                     "DAILY" to t("freq_daily"),
                     "WEEKLY" to t("freq_weekly"),
                     "WEEKDAYS" to t("freq_weekdays"),
-                    "INTERVAL" to t("freq_interval")
+                    "INTERVAL" to t("freq_interval"),
                 ).forEach { (type, label) ->
                     val isSelected = frequencyType == type
                     Box(
@@ -322,26 +326,26 @@ fun TaskEditDialog(
                             .border(
                                 1.dp,
                                 if (isSelected) accentColor else MaterialTheme.colorScheme.outline,
-                                RoundedCornerShape(10.dp)
+                                RoundedCornerShape(10.dp),
                             )
                             .background(
                                 if (isSelected) accentColor.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.surfaceVariant
+                                else MaterialTheme.colorScheme.surfaceVariant,
                             )
                             .clickable { frequencyType = type }
                             .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = label,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontFamily = bodyFont,
                                 fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             ),
                             color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -356,13 +360,13 @@ fun TaskEditDialog(
                         .clip(RoundedCornerShape(12.dp))
                         .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(14.dp)
+                        .padding(14.dp),
                 ) {
                     // Preset Chips
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         listOf(2, 3, 4, 5, 7, 10, 14, 30).forEach { days ->
                             val isSel = intervalDays == days
@@ -372,23 +376,23 @@ fun TaskEditDialog(
                                     .border(
                                         1.dp,
                                         if (isSel) accentColor else MaterialTheme.colorScheme.outline,
-                                        RoundedCornerShape(8.dp)
+                                        RoundedCornerShape(8.dp),
                                     )
                                     .background(
                                         if (isSel) accentColor.copy(alpha = 0.2f)
-                                        else MaterialTheme.colorScheme.surface
+                                        else MaterialTheme.colorScheme.surface,
                                     )
                                     .clickable { intervalDays = days }
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = if (isEn) "Every $days d" else "Alle $days Tage",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = bodyFont,
-                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
                                     ),
-                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface
+                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
@@ -400,21 +404,21 @@ fun TaskEditDialog(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = String.format(t("every_x_days"), intervalDays),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = headingFont,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 17.sp
+                                fontSize = 17.sp,
                             ),
-                            color = accentColor
+                            color = accentColor,
                         )
 
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // Decrement button
                             Box(
@@ -424,12 +428,12 @@ fun TaskEditDialog(
                                     .background(MaterialTheme.colorScheme.surface)
                                     .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                                     .clickable { if (intervalDays > 1) intervalDays-- },
-                                contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = "-",
                                     style = MaterialTheme.typography.titleMedium.copy(fontFamily = headingFont),
-                                    color = if (intervalDays > 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    color = if (intervalDays > 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                                 )
                             }
 
@@ -441,12 +445,12 @@ fun TaskEditDialog(
                                     .background(MaterialTheme.colorScheme.surface)
                                     .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                                     .clickable { if (intervalDays < 365) intervalDays++ },
-                                contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = "+",
                                     style = MaterialTheme.typography.titleMedium.copy(fontFamily = headingFont),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
@@ -463,11 +467,11 @@ fun TaskEditDialog(
                         .clip(RoundedCornerShape(12.dp))
                         .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(14.dp)
+                        .padding(14.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         (1..6).forEach { count ->
                             val isSel = targetDaysPerWeek == count
@@ -478,23 +482,23 @@ fun TaskEditDialog(
                                     .border(
                                         1.dp,
                                         if (isSel) accentColor else MaterialTheme.colorScheme.outline,
-                                        RoundedCornerShape(8.dp)
+                                        RoundedCornerShape(8.dp),
                                     )
                                     .background(
                                         if (isSel) accentColor.copy(alpha = 0.2f)
-                                        else MaterialTheme.colorScheme.surface
+                                        else MaterialTheme.colorScheme.surface,
                                     )
                                     .clickable { targetDaysPerWeek = count }
                                     .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = "${count}×",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontFamily = headingFont,
-                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
                                     ),
-                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface
+                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
@@ -511,7 +515,7 @@ fun TaskEditDialog(
                         .clip(RoundedCornerShape(12.dp))
                         .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(14.dp)
+                        .padding(14.dp),
                 ) {
                     val dayLabels = if (isEn) {
                         listOf(1 to "M", 2 to "T", 3 to "W", 4 to "T", 5 to "F", 6 to "S", 7 to "S")
@@ -520,7 +524,7 @@ fun TaskEditDialog(
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         dayLabels.forEach { (dayNum, dayLabel) ->
                             val isSel = selectedDaysOfWeek.contains(dayNum)
@@ -531,11 +535,11 @@ fun TaskEditDialog(
                                     .border(
                                         1.dp,
                                         if (isSel) accentColor else MaterialTheme.colorScheme.outline,
-                                        RoundedCornerShape(8.dp)
+                                        RoundedCornerShape(8.dp),
                                     )
                                     .background(
                                         if (isSel) accentColor.copy(alpha = 0.2f)
-                                        else MaterialTheme.colorScheme.surface
+                                        else MaterialTheme.colorScheme.surface,
                                     )
                                     .clickable {
                                         val newSet = if (isSel) {
@@ -546,24 +550,24 @@ fun TaskEditDialog(
                                         selectedDaysOfWeek = newSet
                                     }
                                     .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = dayLabel,
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontFamily = headingFont,
-                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
                                     ),
-                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface
+                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = DateUtils.formatDaysOfWeekShort(selectedDaysOfWeek.sorted().joinToString(","), language),
+                        text = DateUtils.formatDaysOfWeekShort(selectedDaysOfWeek.asSequence().sorted().joinToString(","), language),
                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = bodyFont),
-                        color = accentColor
+                        color = accentColor,
                     )
                 }
             }
@@ -574,13 +578,13 @@ fun TaskEditDialog(
             Text(
                 text = t("habit_type_label"),
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             val isSimple = !isCounter && !isTimer
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 // Checkbox type
                 Box(
@@ -590,29 +594,29 @@ fun TaskEditDialog(
                         .border(
                             1.dp,
                             if (isSimple) accentColor else MaterialTheme.colorScheme.outline,
-                            RoundedCornerShape(10.dp)
+                            RoundedCornerShape(10.dp),
                         )
                         .background(
                             if (isSimple) accentColor.copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.surfaceVariant
+                            else MaterialTheme.colorScheme.surfaceVariant,
                         )
                         .clickable {
                             isCounter = false
                             isTimer = false
                         }
                         .padding(vertical = 11.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = t("type_simple"),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = bodyFont,
                             fontWeight = if (isSimple) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
                         ),
                         color = if (isSimple) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
 
@@ -624,29 +628,29 @@ fun TaskEditDialog(
                         .border(
                             1.dp,
                             if (isCounter) accentColor else MaterialTheme.colorScheme.outline,
-                            RoundedCornerShape(10.dp)
+                            RoundedCornerShape(10.dp),
                         )
                         .background(
                             if (isCounter) accentColor.copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.surfaceVariant
+                            else MaterialTheme.colorScheme.surfaceVariant,
                         )
                         .clickable {
                             isCounter = true
                             isTimer = false
                         }
                         .padding(vertical = 11.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = t("type_counter"),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = bodyFont,
                             fontWeight = if (isCounter) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
                         ),
                         color = if (isCounter) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
 
@@ -658,29 +662,29 @@ fun TaskEditDialog(
                         .border(
                             1.dp,
                             if (isTimer) accentColor else MaterialTheme.colorScheme.outline,
-                            RoundedCornerShape(10.dp)
+                            RoundedCornerShape(10.dp),
                         )
                         .background(
                             if (isTimer) accentColor.copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.surfaceVariant
+                            else MaterialTheme.colorScheme.surfaceVariant,
                         )
                         .clickable {
                             isTimer = true
                             isCounter = false
                         }
                         .padding(vertical = 11.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = t("type_timer"),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = bodyFont,
                             fontWeight = if (isTimer) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
                         ),
                         color = if (isTimer) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -694,18 +698,18 @@ fun TaskEditDialog(
                         .clip(RoundedCornerShape(12.dp))
                         .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(14.dp)
+                        .padding(14.dp),
                 ) {
                     Text(
                         text = t("timer_duration_label"),
                         style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         listOf(5, 10, 15, 20, 25, 30, 45, 60).forEach { mins ->
                             val isSel = durationMinutesText == mins.toString()
@@ -715,23 +719,23 @@ fun TaskEditDialog(
                                     .border(
                                         1.dp,
                                         if (isSel) accentColor else MaterialTheme.colorScheme.outline,
-                                        RoundedCornerShape(8.dp)
+                                        RoundedCornerShape(8.dp),
                                     )
                                     .background(
                                         if (isSel) accentColor.copy(alpha = 0.2f)
-                                        else MaterialTheme.colorScheme.surface
+                                        else MaterialTheme.colorScheme.surface,
                                     )
                                     .clickable { durationMinutesText = mins.toString() }
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = "$mins min",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = bodyFont,
-                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
                                     ),
-                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface
+                                    color = if (isSel) accentColor else MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
@@ -752,8 +756,8 @@ fun TaskEditDialog(
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = accentColor,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                        )
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        ),
                     )
                 }
             }
@@ -765,7 +769,7 @@ fun TaskEditDialog(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Target count with steppers
                     OutlinedTextField(
@@ -778,9 +782,9 @@ fun TaskEditDialog(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = accentColor,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                            focusedLabelColor = accentColor
+                            focusedLabelColor = accentColor,
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
                     )
 
                     // Target unit input
@@ -794,9 +798,9 @@ fun TaskEditDialog(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = accentColor,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                            focusedLabelColor = accentColor
+                            focusedLabelColor = accentColor,
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
                     )
                 }
 
@@ -806,7 +810,7 @@ fun TaskEditDialog(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     listOf(-10, -1, 1, 10).forEach { delta ->
                         Box(
@@ -821,15 +825,15 @@ fun TaskEditDialog(
                                     targetCountText = newVal.toString()
                                 }
                                 .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = if (delta > 0) "+$delta" else "$delta",
+                                text = if (delta > 0) "+$delta" else delta.toString(),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = headingFont,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
                                 ),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -840,7 +844,7 @@ fun TaskEditDialog(
                 // Clean Unit Chips (reps, ml, pages, mins, km)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     commonUnits.forEach { u ->
                         val isSelected = unitText.equals(u, ignoreCase = true)
@@ -851,23 +855,23 @@ fun TaskEditDialog(
                                 .border(
                                     1.dp,
                                     if (isSelected) accentColor else MaterialTheme.colorScheme.outline,
-                                    RoundedCornerShape(8.dp)
+                                    RoundedCornerShape(8.dp),
                                 )
                                 .background(
                                     if (isSelected) accentColor.copy(alpha = 0.15f)
-                                    else MaterialTheme.colorScheme.surfaceVariant
+                                    else MaterialTheme.colorScheme.surfaceVariant,
                                 )
                                 .clickable { unitText = u }
                                 .padding(vertical = 6.dp),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = u,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = bodyFont,
-                                    fontSize = 11.sp
+                                    fontSize = 11.sp,
                                 ),
-                                color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -885,7 +889,7 @@ fun TaskEditDialog(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -893,13 +897,13 @@ fun TaskEditDialog(
                             imageVector = Icons.Default.AccessTime,
                             contentDescription = null,
                             tint = if (reminderEnabled) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = t("reminder_label"),
                             style = MaterialTheme.typography.labelMedium.copy(fontFamily = bodyFont),
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                     if (reminderEnabled) {
@@ -908,7 +912,7 @@ fun TaskEditDialog(
                             text = String.format(t("reminder_set_at"), timeStr),
                             style = MaterialTheme.typography.bodyMedium.copy(fontFamily = bodyFont),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 26.dp, top = 2.dp)
+                            modifier = Modifier.padding(start = 26.dp, top = 2.dp),
                         )
                     }
                 }
@@ -919,8 +923,8 @@ fun TaskEditDialog(
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
                         checkedTrackColor = accentColor,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.surface
-                    )
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surface,
+                    ),
                 )
             }
 
@@ -942,25 +946,25 @@ fun TaskEditDialog(
                                 },
                                 reminderHour,
                                 reminderMinute,
-                                true
+                                true,
                             ).show()
                         }
-                        .padding(14.dp)
+                        .padding(14.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = t("set_time_button"),
                             style = MaterialTheme.typography.labelMedium.copy(fontFamily = bodyFont),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             text = DateUtils.formatTime(reminderHour, reminderMinute),
                             style = MaterialTheme.typography.titleMedium.copy(fontFamily = headingFont),
-                            color = accentColor
+                            color = accentColor,
                         )
                     }
                 }
@@ -972,9 +976,9 @@ fun TaskEditDialog(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (task != null && onDelete != null) {
+                if ((task != null) && (onDelete != null)) {
                     IconButton(
                         onClick = {
                             onDelete(task)
@@ -983,12 +987,12 @@ fun TaskEditDialog(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = t("delete"),
-                            tint = accentColor
+                            tint = accentColor,
                         )
                     }
                 }
@@ -998,7 +1002,7 @@ fun TaskEditDialog(
                         if (title.isNotBlank()) {
                             val targetCnt = targetCountText.toIntOrNull()?.coerceAtLeast(1) ?: 10
                             val daysCsv = if (frequencyType == "WEEKDAYS") {
-                                selectedDaysOfWeek.sorted().joinToString(",")
+                                selectedDaysOfWeek.asSequence().sorted().joinToString(",")
                             } else {
                                 "1,2,3,4,5,6,7"
                             }
@@ -1018,10 +1022,9 @@ fun TaskEditDialog(
                                 durationMinutes = durationMins,
                                 reminderEnabled = reminderEnabled,
                                 reminderHour = if (reminderEnabled) reminderHour else null,
-                                reminderMinute = if (reminderEnabled) reminderMinute else null
+                                reminderMinute = if (reminderEnabled) reminderMinute else null,
                             )
                             onSave(updated)
-                            onDismiss()
                         }
                     },
                     modifier = Modifier
@@ -1033,12 +1036,12 @@ fun TaskEditDialog(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = accentColor,
                         contentColor = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
                 ) {
                     Text(
                         text = if (task == null) t("save_task") else t("save_changes"),
-                        style = MaterialTheme.typography.labelLarge.copy(fontFamily = bodyFont)
+                        style = MaterialTheme.typography.labelLarge.copy(fontFamily = bodyFont),
                     )
                 }
             }

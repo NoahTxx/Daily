@@ -1,8 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
@@ -44,10 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,7 +67,7 @@ fun RoutinesScreen(
     tasks: List<DailyTask>,
     onAddTaskClick: () -> Unit,
     onEditTaskClick: (DailyTask) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val accentColor = LocalAccentColor.current
     val language = LocalAppLanguage.current
@@ -82,7 +77,13 @@ fun RoutinesScreen(
 
     val resetInfoDismissed by viewModel.routinesResetInfoDismissed.collectAsStateWithLifecycle()
 
-    val activeCount = remember(tasks) { tasks.count { !it.isArchived } }
+    val activeCount = remember(tasks) {
+        var count = 0
+        for (i in tasks.indices) {
+            if (!tasks[i].isArchived) count++
+        }
+        count
+    }
     val totalCount = remember(tasks) { tasks.size }
     val badgeString = remember(activeCount, totalCount, language) {
         if (totalCount == 0) {
@@ -101,14 +102,14 @@ fun RoutinesScreen(
                 .fillMaxSize()
                 .statusBarsPadding(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 150.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item(key = "header", contentType = "header") {
                 NothingHeader(
                     title = t("routines_header"),
                     subtitle = null,
                     badgeText = badgeString,
-                    badgeFontSize = 20.sp
+                    badgeFontSize = 20.sp,
                 )
             }
 
@@ -117,36 +118,36 @@ fun RoutinesScreen(
                     NothingCard(
                         modifier = Modifier.fillMaxWidth(),
                         shape = com.example.ui.components.ShapeCardMedium,
-                        backgroundColor = MaterialTheme.colorScheme.surfaceVariant
+                        backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(accentColor)
+                                    .background(accentColor),
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = t("routines_info"),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = bodyFont),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             )
                             IconButton(
                                 onClick = { viewModel.dismissRoutinesResetInfo() },
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(36.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = t("dismiss_hint"),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                         }
@@ -160,51 +161,54 @@ fun RoutinesScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 20.dp),
-                        shape = com.example.ui.components.ShapeCardLarge
+                        shape = com.example.ui.components.ShapeCardLarge,
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
                                 text = t("no_routines_title"),
                                 style = MaterialTheme.typography.titleMedium.copy(fontFamily = headingFont),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = t("no_routines_subtitle"),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = bodyFont),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 }
             } else {
-                val activeTasks = tasks.filter { !it.isArchived }
-                val pausedTasks = tasks.filter { it.isArchived }
+                val activeTasks = ArrayList<DailyTask>(tasks.size)
+                val pausedTasks = ArrayList<DailyTask>(tasks.size)
+                for (i in tasks.indices) {
+                    val t = tasks[i]
+                    if (!t.isArchived) activeTasks.add(t) else pausedTasks.add(t)
+                }
 
                 if (activeTasks.isNotEmpty()) {
                     item(key = "active_header", contentType = "section_header") {
                         com.example.ui.components.TaskSectionHeader(
                             title = t("active_badge"),
                             count = activeTasks.size,
-                            isAccent = true
+                            isAccent = true,
                         )
                     }
 
                     items(
                         items = activeTasks,
-                        key = { it.id },
-                        contentType = { "routine_card" }
+                        key = { (id) -> id },
+                        contentType = { (_) -> "routine_card" },
                     ) { task ->
                         RoutineItemCard(
                             task = task,
                             onEdit = { onEditTaskClick(task) },
                             onToggleActive = { viewModel.toggleTaskActive(task) },
-                            onDelete = { viewModel.deleteTask(task) }
                         )
                     }
                 }
@@ -215,20 +219,19 @@ fun RoutinesScreen(
                         com.example.ui.components.TaskSectionHeader(
                             title = t("paused_badge"),
                             count = pausedTasks.size,
-                            isAccent = false
+                            isAccent = false,
                         )
                     }
 
                     items(
                         items = pausedTasks,
-                        key = { it.id },
-                        contentType = { "routine_card" }
+                        key = { (id) -> id },
+                        contentType = { (_) -> "routine_card" },
                     ) { task ->
                         RoutineItemCard(
                             task = task,
                             onEdit = { onEditTaskClick(task) },
                             onToggleActive = { viewModel.toggleTaskActive(task) },
-                            onDelete = { viewModel.deleteTask(task) }
                         )
                     }
                 }
@@ -245,12 +248,12 @@ fun RoutinesScreen(
                 .testTag("add_routine_fab"),
             containerColor = accentColor,
             contentColor = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
-            shape = CircleShape
+            shape = CircleShape,
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = t("new_routine"),
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
             )
         }
     }
@@ -261,19 +264,13 @@ fun RoutineItemCard(
     task: DailyTask,
     onEdit: () -> Unit,
     onToggleActive: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val accentColor = LocalAccentColor.current
     val language = LocalAppLanguage.current
-    val bodyFont = LocalBodyFontFamily.current
-    val headingFont = LocalHeadingFontFamily.current
     fun t(key: String): String = AppStrings.get(key, language)
 
     val isActive = !task.isArchived
-    val cardBg = remember(isActive) {
-        if (isActive) Color.Unspecified else Color.Unspecified
-    }
 
     val categoryText = remember(task.category) { task.category.uppercase() }
     val freqText = remember(task.frequencyType, task.targetDaysPerWeek, task.daysOfWeek, task.intervalDays, language) {
@@ -288,7 +285,7 @@ fun RoutineItemCard(
         if (task.isCounter) "${t("goal_label")}: ${task.targetCount} ${task.unit}".trim() else null
     }
     val reminderText = remember(task.reminderHour, task.reminderMinute) {
-        if (task.reminderHour != null && task.reminderMinute != null) {
+        if ((task.reminderHour != null) && (task.reminderMinute != null)) {
             DateUtils.formatTime(task.reminderHour, task.reminderMinute)
         } else null
     }
@@ -300,45 +297,45 @@ fun RoutineItemCard(
         modifier = modifier.fillMaxWidth(),
         shape = com.example.ui.components.ShapeCardMedium,
         backgroundColor = if (isActive) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
-        onClick = onEdit
+        onClick = onEdit,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 // Title row with status dot and icon
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .clip(CircleShape)
-                            .background(if (isActive) accentColor else MaterialTheme.colorScheme.outline)
+                            .background(if (isActive) accentColor else MaterialTheme.colorScheme.outline),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(
                         imageVector = TaskIcons.getIcon(task.iconName),
                         contentDescription = null,
                         tint = if (isActive) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = task.title,
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontFamily = FontFamily.Default,
-                            fontSize = 16.sp
+                            fontSize = 16.sp,
                         ),
                         color = if (isActive) MaterialTheme.colorScheme.onSurface
                                else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                 }
 
@@ -353,7 +350,7 @@ fun RoutineItemCard(
                     reminderText = reminderText,
                     reminderEnabled = task.reminderEnabled,
                     accentColor = accentColor,
-                    pausedText = t("paused_badge")
+                    pausedText = t("paused_badge"),
                 )
             }
 
@@ -368,19 +365,19 @@ fun RoutineItemCard(
                     checkedThumbColor = if (accentColor == Color(0xFFF5F5F7)) Color.Black else Color.White,
                     checkedTrackColor = accentColor,
                     uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
             )
 
             IconButton(
                 onClick = onEdit,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(40.dp),
             ) {
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = t("edit_label"),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -394,68 +391,68 @@ fun RoutinePillsSection(
     isActive: Boolean,
     freqText: String?,
     counterText: String?,
-    durationText: String? = null,
     reminderText: String?,
     reminderEnabled: Boolean,
     accentColor: Color,
     pausedText: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    durationText: String? = null,
 ) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth(),
     ) {
         NothingPill(text = categoryText)
 
         if (!isActive) {
             NothingPill(
                 text = pausedText,
-                isAccent = false
+                isAccent = false,
             )
         }
 
-        if (freqText != null) {
+        freqText?.let {
             NothingPill(
-                text = freqText,
-                isAccent = isActive
+                text = it,
+                isAccent = isActive,
             )
         }
 
-        if (counterText != null) {
+        counterText?.let {
             NothingPill(
-                text = counterText,
-                isAccent = isActive
+                text = it,
+                isAccent = isActive,
             )
         }
 
-        if (durationText != null) {
+        durationText?.let {
             NothingPill(
-                text = durationText,
+                text = it,
                 isAccent = isActive,
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Timer,
                         contentDescription = null,
                         tint = if (isActive) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(12.dp),
                     )
-                }
+                },
             )
         }
 
-        if (reminderText != null) {
+        reminderText?.let {
             NothingPill(
-                text = reminderText,
-                isAccent = isActive && reminderEnabled,
+                text = it,
+                isAccent = (isActive && reminderEnabled),
                 leadingIcon = {
                     Icon(
                         imageVector = if (reminderEnabled && isActive) Icons.Default.Alarm else Icons.Default.AlarmOff,
                         contentDescription = null,
                         tint = if (reminderEnabled && isActive) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(12.dp),
                     )
-                }
+                },
             )
         }
     }

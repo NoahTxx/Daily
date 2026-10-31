@@ -13,5 +13,5 @@ data class StreakFreeze(
     val endDate: String,   // ISO date e.g. "2026-11-05"
     val type: String = "SICKNESS", // "SICKNESS" (Krankheit/Regeneration), "VACATION" (Urlaub/Reise)
     val note: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
 )

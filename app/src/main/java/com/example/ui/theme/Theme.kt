@@ -31,7 +31,7 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = NothingDarkSurfaceVariant,
     onSurfaceVariant = NothingDarkTextSecondary,
     outline = NothingDarkBorder,
-    outlineVariant = NothingDarkBorderSubtle
+    outlineVariant = NothingDarkBorderSubtle,
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -54,7 +54,7 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = NothingLightSurfaceVariant,
     onSurfaceVariant = NothingLightTextSecondary,
     outline = NothingLightBorder,
-    outlineVariant = NothingLightSurfaceVariant
+    outlineVariant = NothingLightSurfaceVariant,
 )
 
 @Composable
@@ -63,22 +63,22 @@ fun MyApplicationTheme(
     headingFont: FontFamily = LocalHeadingFontFamily.current,
     bodyFont: FontFamily = LocalBodyFontFamily.current,
     darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val dynamicDark = DarkColorScheme.copy(
         tertiary = accentColor,
         tertiaryContainer = accentColor.copy(alpha = 0.15f),
-        onTertiaryContainer = accentColor
+        onTertiaryContainer = accentColor,
     )
     val dynamicLight = LightColorScheme.copy(
         tertiary = accentColor,
         tertiaryContainer = accentColor.copy(alpha = 0.15f),
-        onTertiaryContainer = accentColor
+        onTertiaryContainer = accentColor,
     )
     val colorScheme = if (darkTheme) dynamicDark else dynamicLight
     MaterialTheme(
         colorScheme = colorScheme,
         typography = createAppTypography(headingFont, bodyFont),
-        content = content
+        content = content,
     )
 }

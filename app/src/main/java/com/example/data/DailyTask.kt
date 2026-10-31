@@ -10,8 +10,8 @@ import androidx.room.PrimaryKey
     tableName = "daily_tasks",
     indices = [
         Index(value = ["isArchived", "orderIndex", "id"], name = "index_daily_tasks_isArchived_orderIndex"),
-        Index(value = ["isArchived", "reminderEnabled"], name = "index_daily_tasks_reminderEnabled")
-    ]
+        Index(value = ["isArchived", "reminderEnabled"], name = "index_daily_tasks_reminderEnabled"),
+    ],
 )
 data class DailyTask(
     @PrimaryKey(autoGenerate = true)
@@ -33,13 +33,15 @@ data class DailyTask(
     val intervalAnchorDate: String = "", // anchor dateKey (e.g. "2026-10-04")
     val durationMinutes: Int = 0, // 0 = not a timer habit; > 0 = focus timer target in minutes
     val createdAt: Long = System.currentTimeMillis(),
-    val isArchived: Boolean = false
+    val isArchived: Boolean = false,
 ) {
+    @Suppress("unused")
     val isTimer: Boolean
         get() = durationMinutes > 0
 
+    @Suppress("unused")
     val reminderTimeString: String?
-        get() = if (reminderEnabled && reminderHour != null && reminderMinute != null) {
+        get() = if (reminderEnabled && (reminderHour != null) && (reminderMinute != null)) {
             String.format(java.util.Locale.US, "%02d:%02d", reminderHour, reminderMinute)
         } else null
 }

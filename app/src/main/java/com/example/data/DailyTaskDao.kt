@@ -99,7 +99,8 @@ interface DailyTaskDao {
     @Query("SELECT DISTINCT dateKey FROM task_completions ORDER BY dateKey DESC")
     fun getAllCompletionDatesSync(): List<String>
 
-    @Query("""
+    @Query(
+        """
         SELECT tc.dateKey 
         FROM task_completions tc
         INNER JOIN daily_tasks dt ON tc.taskId = dt.id
@@ -108,10 +109,12 @@ interface DailyTaskDao {
         HAVING COUNT(DISTINCT tc.taskId) >= (SELECT COUNT(*) FROM daily_tasks WHERE isArchived = 0) 
            AND (SELECT COUNT(*) FROM daily_tasks WHERE isArchived = 0) > 0
         ORDER BY tc.dateKey DESC
-    """)
+        """,
+    )
     fun getFullyCompletedDatesFlow(): Flow<List<String>>
 
-    @Query("""
+    @Query(
+        """
         SELECT tc.dateKey 
         FROM task_completions tc
         INNER JOIN daily_tasks dt ON tc.taskId = dt.id
@@ -120,7 +123,8 @@ interface DailyTaskDao {
         HAVING COUNT(DISTINCT tc.taskId) >= (SELECT COUNT(*) FROM daily_tasks WHERE isArchived = 0) 
            AND (SELECT COUNT(*) FROM daily_tasks WHERE isArchived = 0) > 0
         ORDER BY tc.dateKey DESC
-    """)
+        """,
+    )
     fun getFullyCompletedDatesSync(): List<String>
 
     // Streak Freezes

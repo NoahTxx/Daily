@@ -1,8 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,23 +26,23 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.util.AppLanguage
 import com.example.util.AppStrings
 import com.example.util.LocalAccentColor
 import com.example.util.LocalAppLanguage
@@ -67,13 +64,13 @@ fun NothingCard(
     backgroundColor: Color = MaterialTheme.colorScheme.surface,
     borderColor: Color = MaterialTheme.colorScheme.outline,
     onClick: (() -> Unit)? = null,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val clickableModifier = if (onClick != null) {
         Modifier.clickable(
             interactionSource = remember(onClick) { MutableInteractionSource() },
             indication = null,
-            onClick = onClick
+            onClick = onClick,
         )
     } else Modifier
 
@@ -81,7 +78,7 @@ fun NothingCard(
         modifier = modifier
             .background(backgroundColor, shape)
             .border(1.dp, borderColor, shape)
-            .then(clickableModifier)
+            .then(clickableModifier),
     ) {
         content()
     }
@@ -94,7 +91,7 @@ fun NothingCheckbox(
     modifier: Modifier = Modifier,
     size: Dp = 28.dp,
     enabled: Boolean = true,
-    testTag: String = "habit_checkbox"
+    testTag: String = "habit_checkbox",
 ) {
     val accentColor = LocalAccentColor.current
     val outlineColor = MaterialTheme.colorScheme.outline
@@ -103,7 +100,7 @@ fun NothingCheckbox(
         Modifier.clickable(
             interactionSource = remember(onCheckedChange) { MutableInteractionSource() },
             indication = null,
-            onClick = onCheckedChange
+            onClick = onCheckedChange,
         )
     } else Modifier
 
@@ -111,7 +108,7 @@ fun NothingCheckbox(
         modifier = modifier
             .size(size)
             .testTag(testTag)
-            .then(clickModifier)
+            .then(clickModifier),
     ) {
         val radius = this.size.minDimension / 2f
         val strokeWidth = 1.5.dp.toPx()
@@ -122,28 +119,28 @@ fun NothingCheckbox(
             drawCircle(
                 color = accentColor.copy(alpha = 0.15f),
                 radius = radius,
-                center = c
+                center = c,
             )
             // Accent circle border
             drawCircle(
                 color = accentColor,
-                radius = radius - strokeWidth / 2f,
+                radius = radius - (strokeWidth / 2f),
                 center = c,
-                style = Stroke(width = strokeWidth)
+                style = Stroke(width = strokeWidth),
             )
             // Inner solid dot
             drawCircle(
                 color = accentColor,
                 radius = radius * 0.46f,
-                center = c
+                center = c,
             )
         } else {
             // Unchecked outline
             drawCircle(
                 color = outlineColor,
-                radius = radius - strokeWidth / 2f,
+                radius = radius - (strokeWidth / 2f),
                 center = c,
-                style = Stroke(width = strokeWidth)
+                style = Stroke(width = strokeWidth),
             )
         }
     }
@@ -154,7 +151,7 @@ fun NothingPill(
     text: String,
     modifier: Modifier = Modifier,
     isAccent: Boolean = false,
-    leadingIcon: (@Composable () -> Unit)? = null
+    leadingIcon: (@Composable () -> Unit)? = null,
 ) {
     val accentColor = LocalAccentColor.current
     val bg = if (isAccent) accentColor.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
@@ -166,7 +163,7 @@ fun NothingPill(
             .background(bg, ShapePill)
             .border(1.dp, border, ShapePill)
             .padding(horizontal = 9.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leadingIcon != null) {
             leadingIcon()
@@ -177,7 +174,7 @@ fun NothingPill(
             style = MaterialTheme.typography.labelSmall,
             color = textColor,
             maxLines = 1,
-            softWrap = false
+            softWrap = false,
         )
     }
 }
@@ -185,11 +182,11 @@ fun NothingPill(
 @Composable
 fun NothingHeader(
     title: String,
+    modifier: Modifier = Modifier,
     subtitle: String? = null,
     badgeText: String? = null,
     badgeFontSize: TextUnit = 22.sp,
     badgeFontFamily: androidx.compose.ui.text.font.FontFamily? = null,
-    modifier: Modifier = Modifier
 ) {
     val accentColor = LocalAccentColor.current
     val headingFont = LocalHeadingFontFamily.current
@@ -198,7 +195,7 @@ fun NothingHeader(
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
             modifier = if (badgeText != null) {
@@ -207,7 +204,7 @@ fun NothingHeader(
                     .padding(end = 12.dp)
             } else {
                 Modifier.fillMaxWidth()
-            }
+            },
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Accent dot
@@ -215,7 +212,7 @@ fun NothingHeader(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(accentColor)
+                        .background(accentColor),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -224,22 +221,22 @@ fun NothingHeader(
                         fontFamily = headingFont,
                         fontSize = 21.sp,
                         lineHeight = 26.sp,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = 0.8.sp,
                     ),
                     maxLines = 1,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
             }
-            if (subtitle != null) {
+            subtitle?.let { sub ->
                 Text(
-                    text = subtitle,
+                    text = sub,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontFamily = bodyFont,
-                        lineHeight = 18.sp
+                        lineHeight = 18.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
-                    modifier = Modifier.padding(start = 16.dp, top = 2.dp)
+                    modifier = Modifier.padding(start = 16.dp, top = 2.dp),
                 )
             }
         }
@@ -250,19 +247,29 @@ fun NothingHeader(
                     .clip(RoundedCornerShape(14.dp))
                     .border(1.2.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .defaultMinSize(minHeight = 38.dp)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = badgeText,
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontFamily = badgeFontFamily ?: headingFont,
                         fontSize = badgeFontSize,
-                        lineHeight = badgeFontSize * 1.25f,
+                        lineHeight = badgeFontSize * 1.15f,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.5.sp,
+                        platformStyle = PlatformTextStyle(
+                            includeFontPadding = false,
+                        ),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.Both,
+                        ),
                     ),
+                    textAlign = TextAlign.Center,
                     color = accentColor,
-                    maxLines = 1
+                    maxLines = 1,
                 )
             }
         }
@@ -273,7 +280,7 @@ fun NothingHeader(
 fun DotMatrixProgress(
     total: Int,
     completed: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     if (total <= 0) return
     val accentColor = LocalAccentColor.current
@@ -281,7 +288,7 @@ fun DotMatrixProgress(
     val count = total.coerceAtMost(16)
 
     Canvas(
-        modifier = modifier.height(10.dp)
+        modifier = modifier.height(10.dp),
     ) {
         val spacing = 5.dp.toPx()
         val doneRadius = 3.5.dp.toPx()
@@ -296,7 +303,7 @@ fun DotMatrixProgress(
             drawCircle(
                 color = color,
                 radius = r,
-                center = Offset(currentX, centerY)
+                center = Offset(currentX, centerY),
             )
             currentX += (r * 2f) + spacing
         }
@@ -307,7 +314,7 @@ fun DotMatrixProgress(
 fun NotificationPermissionCard(
     onGrantClick: () -> Unit,
     onDismissClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val accentColor = LocalAccentColor.current
     val language = LocalAppLanguage.current
@@ -321,26 +328,26 @@ fun NotificationPermissionCard(
     NothingCard(
         modifier = modifier.fillMaxWidth(),
         backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
-        borderColor = accentColor.copy(alpha = 0.5f)
+        borderColor = accentColor.copy(alpha = 0.5f),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
                     .background(accentColor.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Default.Notifications,
                     contentDescription = title,
                     tint = accentColor,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
 
@@ -352,14 +359,14 @@ fun NotificationPermissionCard(
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontFamily = headingFont,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.5.sp,
                     ),
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium.copy(fontFamily = bodyFont),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -372,27 +379,27 @@ fun NotificationPermissionCard(
                     .clickable(onClick = onGrantClick)
                     .defaultMinSize(minWidth = 56.dp, minHeight = 48.dp)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = buttonText,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontFamily = bodyFont,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     ),
-                    color = Color.White
+                    color = Color.White,
                 )
             }
 
             IconButton(
                 onClick = onDismissClick,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = "Close",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(16.dp),
                 )
             }
         }
@@ -403,9 +410,9 @@ fun NotificationPermissionCard(
 fun TaskSectionHeader(
     title: String,
     count: Int,
+    modifier: Modifier = Modifier,
     subtitle: String? = null,
     isAccent: Boolean = false,
-    modifier: Modifier = Modifier
 ) {
     val accentColor = LocalAccentColor.current
     val headingFont = LocalHeadingFontFamily.current
@@ -416,18 +423,18 @@ fun TaskSectionHeader(
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.weight(1f, fill = false),
         ) {
             // Indicator dot
             Box(
                 modifier = Modifier
                     .size(6.dp)
                     .clip(CircleShape)
-                    .background(if (isAccent) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                    .background(if (isAccent) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -436,9 +443,9 @@ fun TaskSectionHeader(
                     fontFamily = headingFont,
                     fontSize = 13.sp,
                     letterSpacing = 1.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 ),
-                color = if (isAccent) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isAccent) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (subtitle != null) {
                 Spacer(modifier = Modifier.width(8.dp))
@@ -446,10 +453,10 @@ fun TaskSectionHeader(
                     text = "• $subtitle",
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontFamily = bodyFont,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    maxLines = 1
+                    maxLines = 1,
                 )
             }
         }
@@ -464,18 +471,18 @@ fun TaskSectionHeader(
                 .border(
                     width = 1.dp,
                     color = if (isAccent) accentColor.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outline,
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
                 )
-                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
         ) {
             Text(
                 text = count.toString(),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontFamily = bodyFont,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
                 ),
-                color = if (isAccent) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isAccent) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

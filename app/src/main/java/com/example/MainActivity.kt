@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -112,12 +113,12 @@ class MainActivity : ComponentActivity() {
                 LocalAccentColor provides selectedAccent.color,
                 LocalAppLanguage provides selectedLanguage,
                 LocalHeadingFontFamily provides headingFontFamily,
-                LocalBodyFontFamily provides bodyFontFamily
+                LocalBodyFontFamily provides bodyFontFamily,
             ) {
                 MyApplicationTheme(
                     accentColor = selectedAccent.color,
                     headingFont = headingFontFamily,
-                    bodyFont = bodyFontFamily
+                    bodyFont = bodyFontFamily,
                 ) {
                     MainContent(viewModel = viewModel, appSettings = appSettings)
                 }
@@ -129,7 +130,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
     var currentTab by rememberSaveable { mutableStateOf(DailyNavTab.TODAY) }
-    var showEditSheet by rememberSaveable { mutableStateOf(false) }
+    var showEditSheet by rememberSaveable { mutableStateOf(value = false) }
     var taskToEdit by rememberSaveable { mutableStateOf<DailyTask?>(null) }
 
     val selectedDateKey by viewModel.selectedDateKey.collectAsStateWithLifecycle()
@@ -140,6 +141,7 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
     val currentStreak by viewModel.currentStreak.collectAsStateWithLifecycle()
     val streakStats by viewModel.streakStats.collectAsStateWithLifecycle()
     val allCompletionDates by viewModel.allCompletionDates.collectAsStateWithLifecycle()
+    val fullyCompletedDates by viewModel.fullyCompletedDates.collectAsStateWithLifecycle()
 
     val openTaskEditor: (DailyTask?) -> Unit = remember {
         { task ->
@@ -166,10 +168,13 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background
-    ) { _ ->
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    ) { innerPadding ->
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
         ) {
             when (currentTab) {
                 DailyNavTab.TODAY -> {
@@ -180,12 +185,13 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
                         selectedCategory = selectedCategory,
                         currentStreak = currentStreak,
                         completionDates = allCompletionDates,
+                        fullyCompletedDates = fullyCompletedDates,
                         onAddTaskClick = onAddTaskClick,
                         onEditTaskClick = { task ->
                             if (DateUtils.isToday(selectedDateKey)) {
                                 openTaskEditor(task)
                             }
-                        }
+                        },
                     )
                 }
 
@@ -196,7 +202,7 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
                         onAddTaskClick = onAddTaskClick,
                         onEditTaskClick = { task ->
                             openTaskEditor(task)
-                        }
+                        },
                     )
                 }
 
@@ -205,14 +211,14 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
                         viewModel = viewModel,
                         streakStats = streakStats,
                         completionDates = allCompletionDates,
-                        totalTasksCount = allActiveTasks.size
+                        totalTasksCount = allActiveTasks.size,
                     )
                 }
 
                 DailyNavTab.SETTINGS -> {
                     SettingsScreen(
                         appSettings = appSettings,
-                        viewModel = viewModel
+                        viewModel = viewModel,
                     )
                 }
             }
@@ -220,7 +226,7 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
             NothingBottomNavigation(
                 currentTab = currentTab,
                 onTabSelected = { currentTab = it },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
 
@@ -232,11 +238,10 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
                     viewModel.saveTask(updatedTask)
                     dismissTaskEditor()
                 },
-                onDelete = { taskToDelete ->
-                    viewModel.deleteTask(taskToDelete)
-                    dismissTaskEditor()
-                }
-            )
+            ) { taskToDelete ->
+                viewModel.deleteTask(taskToDelete)
+                dismissTaskEditor()
+            }
         }
     }
 }
@@ -245,7 +250,7 @@ fun MainContent(viewModel: DailyViewModel, appSettings: AppSettings) {
 fun NothingBottomNavigation(
     currentTab: DailyNavTab,
     onTabSelected: (DailyNavTab) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val accentColor = LocalAccentColor.current
     val currentLang = LocalAppLanguage.current
@@ -255,7 +260,7 @@ fun NothingBottomNavigation(
         modifier = modifier
             .navigationBarsPadding()
             .padding(bottom = 12.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Row(
             modifier = Modifier
@@ -264,11 +269,11 @@ fun NothingBottomNavigation(
                 .border(
                     width = 1.dp,
                     color = Color(0xFF26262E),
-                    shape = RoundedCornerShape(32.dp)
+                    shape = RoundedCornerShape(32.dp),
                 )
                 .padding(horizontal = 6.dp, vertical = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             DailyNavTab.entries.forEach { tab ->
                 NothingBottomNavItem(
@@ -277,7 +282,7 @@ fun NothingBottomNavigation(
                     currentLang = currentLang,
                     accentColor = accentColor,
                     bodyFont = bodyFont,
-                    onTabSelected = onTabSelected
+                    onTabSelected = onTabSelected,
                 )
             }
         }
@@ -292,7 +297,7 @@ private fun NothingBottomNavItem(
     accentColor: Color,
     bodyFont: FontFamily,
     onTabSelected: (DailyNavTab) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val contentColor = if (isSelected) Color(0xFFF5F5F7) else Color(0xFF6E6E78)
@@ -314,22 +319,21 @@ private fun NothingBottomNavItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = { onTabSelected(tab) }
-            )
+            ) { onTabSelected(tab) }
             .defaultMinSize(minHeight = 44.dp)
             .padding(
                 horizontal = if (tab == DailyNavTab.SETTINGS) 12.dp else 14.dp,
-                vertical = 8.dp
+                vertical = 8.dp,
             )
             .testTag("nav_tab_${tab.name.lowercase()}"),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isSelected) {
             Box(
                 modifier = Modifier
                     .size(5.dp)
                     .clip(CircleShape)
-                    .background(accentColor)
+                    .background(accentColor),
             )
             Spacer(modifier = Modifier.width(6.dp))
         }
@@ -339,16 +343,16 @@ private fun NothingBottomNavItem(
                 imageVector = Icons.Default.Settings,
                 contentDescription = tabTitle,
                 tint = if (isSelected) accentColor else contentColor,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(16.dp),
             )
         } else {
             Text(
                 text = tabTitle,
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontFamily = bodyFont,
-                    letterSpacing = 1.sp
+                    letterSpacing = 1.sp,
                 ),
-                color = contentColor
+                color = contentColor,
             )
         }
     }

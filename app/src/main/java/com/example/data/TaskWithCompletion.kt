@@ -13,5 +13,5 @@ data class TaskWithCompletion(
     val isWeeklyGoalMet: Boolean = false,
     val isMandatoryToday: Boolean = true,
     val daysUntilDue: Int = 0,
-    val lastCompletionDateKey: String? = null
+    val lastCompletionDateKey: String? = null,
 )
