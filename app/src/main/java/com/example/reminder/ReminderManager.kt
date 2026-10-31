@@ -7,12 +7,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.createBitmap
 import com.example.MainActivity
 import com.example.R
 import com.example.data.DailyDatabase
@@ -30,6 +28,7 @@ object ReminderManager {
 
     const val CHANNEL_ID = "daily_reminders_channel"
     const val EXTRA_TASK_ID = "extra_task_id"
+    const val EXTRA_OPEN_TIMER_TASK_ID = "extra_open_timer_task_id"
 
     private const val GENERAL_REMINDER_REQUEST_CODE = 99902
     private const val GENERAL_NOTIFICATION_ID = 99901
@@ -156,7 +155,12 @@ object ReminderManager {
         }
     }
 
-    fun showReminderNotification(context: Context, task: DailyTask, isSnoozed: Boolean = false) {
+    fun showReminderNotification(
+        context: Context,
+        task: DailyTask,
+        isSnoozed: Boolean = false,
+        currentCount: Int = 0,
+    ) {
         if (!canPostNotifications(context)) return
 
         val appSettings = AppSettings.getInstance(context)
@@ -164,7 +168,10 @@ object ReminderManager {
         val accentColor = appSettings.selectedAccent.value.color.toArgb()
 
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            if (task.isTimer) {
+                putExtra(EXTRA_OPEN_TIMER_TASK_ID, task.id)
+            }
         }
         val openAppPendingIntent = PendingIntent.getActivity(
             context,
@@ -173,17 +180,47 @@ object ReminderManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val completeIntent = Intent(context, QuickActionReceiver::class.java).apply {
-            action = QuickActionReceiver.ACTION_COMPLETE_TASK
-            putExtra(EXTRA_TASK_ID, task.id)
-            putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, task.id.toInt())
+        val primaryActionPendingIntent = when {
+            task.isTimer -> {
+                val startTimerIntent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra(EXTRA_OPEN_TIMER_TASK_ID, task.id)
+                }
+                PendingIntent.getActivity(
+                    context,
+                    task.id.toInt() + 20000,
+                    startTimerIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
+            task.isCounter -> {
+                openAppPendingIntent
+            }
+            else -> {
+                val completeIntent = Intent(context, QuickActionReceiver::class.java).apply {
+                    action = QuickActionReceiver.ACTION_COMPLETE_TASK
+                    putExtra(EXTRA_TASK_ID, task.id)
+                    putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, task.id.toInt())
+                }
+                PendingIntent.getBroadcast(
+                    context,
+                    task.id.toInt() + 20000,
+                    completeIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
         }
-        val completePendingIntent = PendingIntent.getBroadcast(
-            context,
-            task.id.toInt() + 20000,
-            completeIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+
+        val primaryActionIcon = when {
+            task.isTimer -> R.drawable.ic_play_arrow
+            task.isCounter -> R.drawable.ic_play_arrow
+            else -> R.drawable.ic_check
+        }
+        val primaryActionLabel = when {
+            task.isTimer -> AppStrings.get("notif_start_timer", language)
+            task.isCounter -> AppStrings.get("notif_open_app", language)
+            else -> AppStrings.get("notif_mark_done", language)
+        }
 
         val snooze10PendingIntent = createSnoozeTaskPendingIntent(
             context = context,
@@ -208,14 +245,33 @@ object ReminderManager {
         )
 
         val title = AppStrings.get("notif_task_reminder_title", language)
-        val baseBody = String.format(AppStrings.get("notif_task_reminder_body", language), task.title)
+        val baseBody = if (task.isCounter) {
+            val u = task.unit.trim()
+            if (u.isNotEmpty()) {
+                String.format(
+                    AppStrings.get("notif_task_counter_body", language),
+                    task.title,
+                    currentCount,
+                    task.targetCount,
+                    u,
+                )
+            } else {
+                String.format(
+                    AppStrings.get("notif_task_counter_body_nounit", language),
+                    task.title,
+                    currentCount,
+                    task.targetCount,
+                )
+            }
+        } else {
+            String.format(AppStrings.get("notif_task_reminder_body", language), task.title)
+        }
         val body = if (isSnoozed) {
             "$baseBody • ${AppStrings.get("notif_snoozed_indicator", language)}"
         } else {
             baseBody
         }
 
-        val largeAppIcon = getAppLargeIcon(context)
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -226,12 +282,10 @@ object ReminderManager {
             .setContentIntent(openAppPendingIntent)
             .setAutoCancel(true)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .addAction(R.drawable.widget_checkbox_checked, AppStrings.get("notif_mark_done", language), completePendingIntent)
+            .addAction(primaryActionIcon, primaryActionLabel, primaryActionPendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_10m", language), snooze10PendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
-
-        largeAppIcon?.let { notificationBuilder.setLargeIcon(it) }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(task.id.toInt(), notificationBuilder.build())
@@ -303,7 +357,6 @@ object ReminderManager {
             baseMessage
         }
 
-        val largeAppIcon = getAppLargeIcon(context)
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -316,8 +369,6 @@ object ReminderManager {
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_10m", language), snooze10PendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
-
-        largeAppIcon?.let { notificationBuilder.setLargeIcon(it) }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(GENERAL_NOTIFICATION_ID, notificationBuilder.build())
@@ -518,7 +569,6 @@ object ReminderManager {
 
         val title = AppStrings.get("notif_test_title", language)
         val body = AppStrings.get("notif_test_body", language)
-        val largeAppIcon = getAppLargeIcon(context)
 
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -532,28 +582,7 @@ object ReminderManager {
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_30m", language), snooze30PendingIntent)
             .addAction(R.drawable.widget_dot_gray, AppStrings.get("notif_snooze_60m", language), snooze60PendingIntent)
 
-        largeAppIcon?.let { notificationBuilder.setLargeIcon(it) }
-
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(TEST_NOTIFICATION_ID, notificationBuilder.build())
-    }
-
-    private fun getAppLargeIcon(context: Context): android.graphics.Bitmap? {
-        return try {
-            BitmapFactory.decodeResource(context.resources, R.drawable.daily_nothing_icon)
-        } catch (_: Exception) {
-            null
-        } ?: try {
-            val drawable = ContextCompat.getDrawable(context, R.mipmap.ic_launcher) ?: return null
-            val w = drawable.intrinsicWidth.takeIf { it > 0 } ?: 128
-            val h = drawable.intrinsicHeight.takeIf { it > 0 } ?: 128
-            val bitmap = createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(bitmap)
-            drawable.setBounds(0, 0, canvas.width, canvas.height)
-            drawable.draw(canvas)
-            bitmap
-        } catch (_: Exception) {
-            null
-        }
     }
 }

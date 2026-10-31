@@ -270,7 +270,12 @@ fun StreakFreezeDialog(
                                 DatePickerDialog(
                                     context,
                                     { _, year, month, day ->
-                                        customStartDate = String.format(java.util.Locale.US, "%04d-%02d-%02d", year, month + 1, day)
+                                        val picked = String.format(java.util.Locale.US, "%04d-%02d-%02d", year, month + 1, day)
+                                        customStartDate = picked
+                                        val maxAllowedEnd = DateUtils.addDays(picked, 13) // max 14 days (2 weeks)
+                                        if ((customEndDate < picked) || (customEndDate > maxAllowedEnd)) {
+                                            customEndDate = maxAllowedEnd
+                                        }
                                     },
                                     c[Calendar.YEAR],
                                     c[Calendar.MONTH],
@@ -280,7 +285,7 @@ fun StreakFreezeDialog(
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
                         Text(
-                            text = String.format(t("freeze_date_from"), customStartDate),
+                            text = String.format(t("freeze_date_from"), DateUtils.formatDateDmy(customStartDate)),
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -294,23 +299,40 @@ fun StreakFreezeDialog(
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable {
                                 val c = Calendar.getInstance()
-                                DatePickerDialog(
+                                val dialog = DatePickerDialog(
                                     context,
                                     { _, year, month, day ->
                                         val picked = String.format(java.util.Locale.US, "%04d-%02d-%02d", year, month + 1, day)
-                                        if (picked >= customStartDate) {
-                                            customEndDate = picked
+                                        val maxAllowedEnd = DateUtils.addDays(customStartDate, 13) // max 14 days (2 weeks)
+                                        customEndDate = when {
+                                            picked < customStartDate -> customStartDate
+                                            picked > maxAllowedEnd -> maxAllowedEnd
+                                            else -> picked
                                         }
                                     },
                                     c[Calendar.YEAR],
                                     c[Calendar.MONTH],
                                     c[Calendar.DAY_OF_MONTH],
-                                ).show()
+                                )
+                                // Enforce 2-week limit in DatePicker calendar bounds
+                                val minCal = Calendar.getInstance().apply {
+                                    val parts = customStartDate.split("-")
+                                    if (parts.size == 3) {
+                                        set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), 0, 0, 0)
+                                    }
+                                }
+                                val maxCal = Calendar.getInstance().apply {
+                                    timeInMillis = minCal.timeInMillis
+                                    add(Calendar.DAY_OF_YEAR, 13)
+                                }
+                                dialog.datePicker.minDate = minCal.timeInMillis
+                                dialog.datePicker.maxDate = maxCal.timeInMillis
+                                dialog.show()
                             }
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
                         Text(
-                            text = String.format(t("freeze_date_to"), customEndDate),
+                            text = String.format(t("freeze_date_to"), DateUtils.formatDateDmy(customEndDate)),
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = bodyFont),
                             color = MaterialTheme.colorScheme.onSurface,
                         )

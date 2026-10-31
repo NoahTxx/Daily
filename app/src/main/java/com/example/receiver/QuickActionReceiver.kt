@@ -104,7 +104,13 @@ class QuickActionReceiver : BroadcastReceiver() {
                                 completion != null
                             }
                             if (!isDoneToday) {
-                                ReminderManager.showReminderNotification(context, task, isSnoozed = true)
+                                val currentCount = completion?.count ?: 0
+                                ReminderManager.showReminderNotification(
+                                    context,
+                                    task,
+                                    isSnoozed = true,
+                                    currentCount = currentCount,
+                                )
                             }
                         }
                     } catch (e: Exception) {

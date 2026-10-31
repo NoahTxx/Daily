@@ -29,7 +29,8 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
                     val shouldNotify = (taskStatus != null) && taskStatus.isDueToday && !taskStatus.isCompleted
 
                     if (shouldNotify) {
-                        ReminderManager.showReminderNotification(context, task)
+                        val currentCount = taskStatus.count
+                        ReminderManager.showReminderNotification(context, task, currentCount = currentCount)
                     }
                     // Schedule next occurrence for tomorrow
                     ReminderManager.scheduleReminder(context, task)

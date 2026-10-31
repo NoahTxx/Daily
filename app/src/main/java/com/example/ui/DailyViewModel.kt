@@ -89,6 +89,17 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
         _selectedHabitIdForStats.value = taskId
     }
 
+    private val _pendingTimerTaskId = MutableStateFlow<Long?>(null)
+    val pendingTimerTaskId: StateFlow<Long?> = _pendingTimerTaskId.asStateFlow()
+
+    fun requestOpenTimer(taskId: Long) {
+        _pendingTimerTaskId.value = taskId
+    }
+
+    fun clearPendingTimer() {
+        _pendingTimerTaskId.value = null
+    }
+
     val allActiveTasks: StateFlow<List<DailyTask>> = repository.getAllActiveTasks()
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

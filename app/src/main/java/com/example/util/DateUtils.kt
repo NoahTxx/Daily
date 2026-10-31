@@ -222,6 +222,19 @@ object DateUtils {
         }
     }
 
+    fun formatDateDmy(dateKey: String): String {
+        return try {
+            val parts = dateKey.split("-")
+            if (parts.size == 3) {
+                "${parts[2]}.${parts[1]}.${parts[0]}"
+            } else {
+                dateKey
+            }
+        } catch (_: Exception) {
+            dateKey
+        }
+    }
+
     fun getRemainingDaysInWeek(dateKey: String): Int {
         val isoDay = getIsoDayOfWeek(dateKey) // 1..7 (1=Mon, 7=Sun)
         return ((7 - isoDay) + 1).coerceIn(1, 7)

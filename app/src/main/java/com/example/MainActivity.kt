@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleIntent(intent)
 
         setContent {
             val context = LocalContext.current
@@ -123,6 +124,20 @@ class MainActivity : ComponentActivity() {
                     MainContent(viewModel = viewModel, appSettings = appSettings)
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: android.content.Intent?) {
+        val timerTaskId = intent?.getLongExtra(com.example.reminder.ReminderManager.EXTRA_OPEN_TIMER_TASK_ID, -1L) ?: -1L
+        if (timerTaskId != -1L) {
+            viewModel.requestOpenTimer(timerTaskId)
+            intent?.removeExtra(com.example.reminder.ReminderManager.EXTRA_OPEN_TIMER_TASK_ID)
         }
     }
 }

@@ -122,8 +122,20 @@ fun TodayScreen(
     }
 
     val activeFreeze by viewModel.activeFreezeToday.collectAsStateWithLifecycle()
+    val pendingTimerTaskId by viewModel.pendingTimerTaskId.collectAsStateWithLifecycle()
     var activeTimerTask by remember { mutableStateOf<DailyTask?>(null) }
     var showFreezeDialog by remember { mutableStateOf(value = false) }
+
+    LaunchedEffect(pendingTimerTaskId, tasks) {
+        val targetId = pendingTimerTaskId
+        if (targetId != null) {
+            val matchingTask = tasks.firstOrNull { (task) -> task.id == targetId }?.task
+            if (matchingTask != null) {
+                activeTimerTask = matchingTask
+                viewModel.clearPendingTimer()
+            }
+        }
+    }
 
     val (openDueTasks, completedTasks, notDueTasks) = remember(tasks) {
         val open = mutableListOf<TaskWithCompletion>()
@@ -505,8 +517,9 @@ fun TodayScreen(
                                         ),
                                         color = accentColor,
                                     )
+                                    val formattedEndDate = activeFreeze?.endDate?.let { DateUtils.formatDateDmy(it) } ?: ""
                                     Text(
-                                        text = String.format(t("freeze_banner_until"), activeFreeze?.endDate ?: ""),
+                                        text = String.format(t("freeze_banner_until"), formattedEndDate),
                                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = bodyFont),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
