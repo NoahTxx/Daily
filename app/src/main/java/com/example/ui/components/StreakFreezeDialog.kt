@@ -1,12 +1,15 @@
 package com.example.ui.components
 
 import android.app.DatePickerDialog
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -56,8 +59,10 @@ import com.example.util.AppLanguage
 import com.example.util.AppStrings
 import com.example.util.DateUtils
 import com.example.util.HapticUtils
+import kotlin.math.ceil
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -92,7 +97,7 @@ fun StreakFreezeDialog(
     }
 
     // 5-second Hold button state
-    var holdProgress by remember { mutableFloatStateOf(0f) }
+    val holdProgressAnim = remember { Animatable(0f) }
     var isHolding by remember { mutableStateOf(value = false) }
     var holdSecondsRemaining by remember { mutableIntStateOf(5) }
     var wasCancelledEarly by remember { mutableStateOf(value = false) }
@@ -362,8 +367,6 @@ fun StreakFreezeDialog(
             Spacer(modifier = Modifier.height(26.dp))
 
             // 5-SECOND HOLD TO CONFIRM BUTTON
-            val holdDurationMs = 5000L
-
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -379,61 +382,89 @@ fun StreakFreezeDialog(
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             down.consume()
+                            val pointerId = down.id
                             isHolding = true
                             wasCancelledEarly = false
-                            holdProgress = 0f
                             holdSecondsRemaining = 5
 
+                            var isCompleted = false
                             val holdJob = coroutineScope.launch {
-                                val startTime = System.currentTimeMillis()
+                                holdProgressAnim.snapTo(0f)
                                 var lastSecondTicked = 5
 
-                                while (isHolding) {
-                                    val elapsed = System.currentTimeMillis() - startTime
-                                    val progress = (elapsed.toFloat() / holdDurationMs).coerceIn(0f, 1f)
-                                    holdProgress = progress
-                                    val remainingSec = (5 - (elapsed / 1000L).toInt()).coerceAtLeast(0)
-                                    holdSecondsRemaining = remainingSec
+                                val animJob = launch {
+                                    holdProgressAnim.animateTo(
+                                        targetValue = 1f,
+                                        animationSpec = tween(durationMillis = 5000, easing = LinearEasing),
+                                    )
+                                }
 
-                                    if (remainingSec in (1 until lastSecondTicked)) {
-                                        lastSecondTicked = remainingSec
-                                        HapticUtils.vibrateHoldTick(context)
+                                val tickJob = launch {
+                                    while (isActive) {
+                                        val currentProg = holdProgressAnim.value
+                                        val remSec = ceil((1f - currentProg) * 5f).toInt().coerceAtLeast(0)
+                                        holdSecondsRemaining = remSec
+                                        if (remSec in (1 until lastSecondTicked)) {
+                                            lastSecondTicked = remSec
+                                            HapticUtils.vibrateHoldTick(context)
+                                        }
+                                        if (currentProg >= 1f) {
+                                            break
+                                        }
+                                        delay(16.milliseconds)
                                     }
+                                }
 
-                                    if (elapsed >= holdDurationMs) {
-                                        isHolding = false
-                                        holdProgress = 1f
-                                        HapticUtils.vibrateSuccess(context)
-                                        val start = if (durationPreset == 0) customStartDate else todayKey
-                                        onConfirmFreeze(start, computedEndDate, selectedType, "")
-                                        onDismiss()
-                                        break
-                                    }
-                                    delay(40.milliseconds)
+                                animJob.join()
+                                tickJob.cancel()
+
+                                if (holdProgressAnim.value >= 1f) {
+                                    isCompleted = true
+                                    isHolding = false
+                                    HapticUtils.vibrateSuccess(context)
+                                    val start = if (durationPreset == 0) customStartDate else todayKey
+                                    onConfirmFreeze(start, computedEndDate, selectedType, "")
+                                    onDismiss()
                                 }
                             }
 
-                            val up = waitForUpOrCancellation()
-                            if ((up == null) || (holdProgress < 1f)) {
-                                // Cancelled early
+                            // Track pointer continuously; consume moves to prevent parent verticalScroll from stealing touch
+                            var isUp = false
+                            while (!isUp && !isCompleted) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                val change = event.changes.firstOrNull { it.id == pointerId }
+                                if ((change == null) || !change.pressed) {
+                                    isUp = true
+                                } else {
+                                    change.consume()
+                                }
+                            }
+
+                            if (!isCompleted) {
                                 isHolding = false
                                 holdJob.cancel()
-                                if (holdProgress in (0.05f..0.99f)) {
+                                val finalProg = holdProgressAnim.value
+                                if (finalProg in (0.05f..0.99f)) {
                                     wasCancelledEarly = true
                                     HapticUtils.vibrateTick(context)
                                 }
-                                holdProgress = 0f
-                                holdSecondsRemaining = 5
+                                coroutineScope.launch {
+                                    holdProgressAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                                    )
+                                    holdSecondsRemaining = 5
+                                }
                             }
                         }
                     },
                 contentAlignment = Alignment.CenterStart,
             ) {
-                // Animated progress fill inside button
+                // Smooth animated progress fill inside button
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .fillMaxWidth(holdProgress)
+                        .fillMaxWidth(holdProgressAnim.value.coerceIn(0f, 1f))
                         .background(accentColor),
                 )
 

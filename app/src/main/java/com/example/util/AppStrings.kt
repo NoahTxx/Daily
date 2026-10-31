@@ -249,7 +249,7 @@ object AppStrings {
             "timer_reset_confirm" -> if (isEn) "TAP AGAIN TO RESET" else "NOCHMAL TIPPEN"
             "timer_completed" -> if (isEn) "FOCUS TIME COMPLETED!" else "FOKUS-ZEIT GESCHAFFT!"
             "timer_complete_now" -> if (isEn) "MARK AS COMPLETED" else "ALS ERLEDIGT MARKIEREN"
-            "timer_hold_to_complete" -> if (isEn) "Timer forgotten? Hold to complete" else "Timer vergessen? Gedrückt halten"
+            "timer_hold_to_complete" -> if (isEn) "Already done" else "Schon erledigt"
             "timer_holding" -> if (isEn) "HOLDING... (%ds)" else "WIRD BEENDET... (%ds)"
             "timer_close" -> if (isEn) "CLOSE" else "SCHLIESSEN"
 

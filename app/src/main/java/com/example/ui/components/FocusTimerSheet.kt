@@ -1,10 +1,15 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +41,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,8 +50,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -59,10 +66,12 @@ import com.example.util.AppLanguage
 import com.example.util.AppStrings
 import com.example.util.HapticUtils
 import com.example.util.TaskIcons
+import kotlin.math.ceil
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,10 +98,9 @@ fun FocusTimerSheet(
     var isFinished by rememberSaveable(task.id) { mutableStateOf(value = false) }
 
     // Hold-to-complete state (3 seconds hold)
+    val holdProgressAnim = remember { Animatable(0f) }
     var isHolding by remember { mutableStateOf(value = false) }
-    var holdProgress by remember { mutableFloatStateOf(0f) }
     var holdSecondsRemaining by remember { mutableIntStateOf(3) }
-    val holdDurationMs = 3000L
 
     // Reset double-tap confirmation state
     var resetConfirmPending by remember { mutableStateOf(value = false) }
@@ -252,26 +260,8 @@ fun FocusTimerSheet(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Reset button with double-tap / confirmation protection
-                IconButton(
-                    onClick = {
-                        if (!resetConfirmPending) {
-                            resetConfirmPending = true
-                            HapticUtils.vibrateTick(context)
-                            resetJob?.cancel()
-                            resetJob = coroutineScope.launch {
-                                delay(2.seconds)
-                                resetConfirmPending = false
-                            }
-                        } else {
-                            resetJob?.cancel()
-                            resetConfirmPending = false
-                            isRunning = false
-                            isFinished = false
-                            remainingSeconds = targetSeconds
-                            HapticUtils.vibrateSuccess(context)
-                        }
-                    },
+                // Reset button with double-tap / confirmation protection (clean custom Box without M3 circle ripple silhouette)
+                Box(
                     modifier = Modifier
                         .size(52.dp)
                         .clip(RoundedCornerShape(12.dp))
@@ -283,7 +273,29 @@ fun FocusTimerSheet(
                         .background(
                             if (resetConfirmPending) accentColor.copy(alpha = 0.18f)
                             else MaterialTheme.colorScheme.surfaceVariant,
-                        ),
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {
+                            if (!resetConfirmPending) {
+                                resetConfirmPending = true
+                                HapticUtils.vibrateTick(context)
+                                resetJob?.cancel()
+                                resetJob = coroutineScope.launch {
+                                    delay(2.seconds)
+                                    resetConfirmPending = false
+                                }
+                            } else {
+                                resetJob?.cancel()
+                                resetConfirmPending = false
+                                isRunning = false
+                                isFinished = false
+                                remainingSeconds = targetSeconds
+                                HapticUtils.vibrateSuccess(context)
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
@@ -329,7 +341,8 @@ fun FocusTimerSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Discreet Fallback: Hold to complete (Only for when user forgot to start the timer)
+            // Discreet Fallback: Hold to complete ("Schon erledigt")
+            val holdProg = holdProgressAnim.value.coerceIn(0f, 1f)
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
@@ -342,66 +355,96 @@ fun FocusTimerSheet(
                         if (isHolding) accentColor.copy(alpha = 0.12f)
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     )
+                    .drawWithContent {
+                        if (holdProg > 0f) {
+                            drawRect(
+                                color = accentColor.copy(alpha = 0.28f),
+                                size = Size(
+                                    width = size.width * holdProg,
+                                    height = size.height,
+                                ),
+                            )
+                        }
+                        drawContent()
+                    }
                     .pointerInput(task.id) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             down.consume()
+                            val pointerId = down.id
                             isHolding = true
-                            holdProgress = 0f
                             holdSecondsRemaining = 3
 
+                            var isCompleted = false
                             val holdJob = coroutineScope.launch {
-                                val startTime = System.currentTimeMillis()
+                                holdProgressAnim.snapTo(0f)
                                 var lastSecondTicked = 3
 
-                                while (isHolding) {
-                                    val elapsed = System.currentTimeMillis() - startTime
-                                    val prog = (elapsed.toFloat() / holdDurationMs).coerceIn(0f, 1f)
-                                    holdProgress = prog
-                                    val remSec = (3 - (elapsed / 1000L).toInt()).coerceAtLeast(0)
-                                    holdSecondsRemaining = remSec
+                                val animJob = launch {
+                                    holdProgressAnim.animateTo(
+                                        targetValue = 1f,
+                                        animationSpec = tween(durationMillis = 3000, easing = LinearEasing),
+                                    )
+                                }
 
-                                    if (remSec in (1 until lastSecondTicked)) {
-                                        lastSecondTicked = remSec
-                                        HapticUtils.vibrateHoldTick(context)
+                                val tickJob = launch {
+                                    while (isActive) {
+                                        val currentProg = holdProgressAnim.value
+                                        val remSec = ceil((1f - currentProg) * 3f).toInt().coerceAtLeast(0)
+                                        holdSecondsRemaining = remSec
+                                        if (remSec in (1 until lastSecondTicked)) {
+                                            lastSecondTicked = remSec
+                                            HapticUtils.vibrateHoldTick(context)
+                                        }
+                                        if (currentProg >= 1f) {
+                                            break
+                                        }
+                                        delay(16.milliseconds)
                                     }
+                                }
 
-                                    if (elapsed >= holdDurationMs) {
-                                        isHolding = false
-                                        holdProgress = 1f
-                                        isRunning = false
-                                        isFinished = true
-                                        HapticUtils.vibrateSuccess(context)
-                                        onCompleted()
-                                        onDismiss()
-                                        break
-                                    }
-                                    delay(40.milliseconds)
+                                animJob.join()
+                                tickJob.cancel()
+
+                                if (holdProgressAnim.value >= 1f) {
+                                    isCompleted = true
+                                    isHolding = false
+                                    isRunning = false
+                                    isFinished = true
+                                    HapticUtils.vibrateSuccess(context)
+                                    onCompleted()
+                                    onDismiss()
                                 }
                             }
 
-                            val up = waitForUpOrCancellation()
-                            if ((up == null) || (holdProgress < 1f)) {
+                            // Track pointer continuously; consume moves to prevent bottom sheet from stealing touch
+                            var isUp = false
+                            while (!isUp && !isCompleted) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                val change = event.changes.firstOrNull { it.id == pointerId }
+                                if ((change == null) || !change.pressed) {
+                                    isUp = true
+                                } else {
+                                    change.consume()
+                                }
+                            }
+
+                            if (!isCompleted) {
                                 isHolding = false
                                 holdJob.cancel()
-                                holdProgress = 0f
-                                holdSecondsRemaining = 3
+                                coroutineScope.launch {
+                                    holdProgressAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                                    )
+                                    holdSecondsRemaining = 3
+                                }
                             }
                         }
                     }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                // Background fill progress indicator
-                if (holdProgress > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(accentColor.copy(alpha = 0.22f)),
-                    )
-                }
-
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
