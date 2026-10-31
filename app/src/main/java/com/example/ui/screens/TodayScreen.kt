@@ -196,7 +196,7 @@ fun TodayScreen(
     val totalCount = remember(requiredTodayTasks) { requiredTodayTasks.size }
     val progressPct = remember(completedCount, totalCount) { if (totalCount > 0) ((completedCount * 100) / totalCount).coerceIn(0, 100) else 0 }
 
-    val recentDays = remember { DateUtils.getPastDays(7) }
+    val recentDays = remember(DateUtils.getTodayKey()) { DateUtils.getPastDays(7) }
     val isViewingToday = DateUtils.isToday(selectedDateKey)
     val fullyCompletedDatesSet = remember(fullyCompletedDates) { fullyCompletedDates.toSet() }
 
@@ -220,18 +220,57 @@ fun TodayScreen(
     val animationEnabled by appSettings.completionAnimationEnabled.collectAsStateWithLifecycle()
 
     var showCelebration by remember { mutableStateOf(value = false) }
-    var previousCompletedCount by remember(selectedDateKey) { mutableIntStateOf(completedCount) }
+    var userTriggeredAction by remember { mutableStateOf(value = false) }
+    var previousCompletedCount by remember { mutableIntStateOf(completedCount) }
+
+    // Track whether today is fully completed right now, to maintain responsive state
+    // even when the user navigates to inspect past days in the date strip.
+    var isTodayCompletedLocally by remember {
+        mutableStateOf<Boolean?>(null)
+    }
+
+    if (isViewingToday && (selectedCategory == null) && (totalCount > 0)) {
+        isTodayCompletedLocally = (completedCount >= totalCount)
+    }
+
+    // Reset user action flag whenever the selected date changes so that date navigation
+    // never triggers the completion celebration
+    LaunchedEffect(selectedDateKey) {
+        userTriggeredAction = false
+    }
 
     LaunchedEffect(completedCount, totalCount) {
-        if ((totalCount > 0) && (completedCount == totalCount) && (previousCompletedCount < totalCount) && DateUtils.isToday(selectedDateKey)) {
+        if (userTriggeredAction &&
+            (totalCount > 0) &&
+            (completedCount == totalCount) &&
+            (previousCompletedCount < totalCount) &&
+            isViewingToday &&
+            (selectedCategory == null)
+        ) {
             if (animationEnabled) {
                 showCelebration = true
             }
             if (vibrationEnabled) {
                 HapticUtils.vibrateSuccess(context)
             }
+            userTriggeredAction = false
+        } else if (completedCount < totalCount) {
+            userTriggeredAction = false
         }
         previousCompletedCount = completedCount
+    }
+
+    LaunchedEffect(fullyCompletedDates) {
+        val todayKey = DateUtils.getTodayKey()
+        if (userTriggeredAction && isViewingToday && fullyCompletedDatesSet.contains(todayKey)) {
+            if (animationEnabled) {
+                showCelebration = true
+            }
+            if (vibrationEnabled) {
+                HapticUtils.vibrateSuccess(context)
+            }
+            userTriggeredAction = false
+        }
     }
 
     val onToggleTask: (Long) -> Unit = remember(isViewingToday, vibrationEnabled, tasks) {
@@ -255,6 +294,7 @@ fun TodayScreen(
                     }
                     Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
                 } else {
+                    userTriggeredAction = true
                     if (vibrationEnabled) HapticUtils.vibrateTick(context)
                     viewModel.toggleTask(taskId)
                 }
@@ -283,6 +323,7 @@ fun TodayScreen(
                     }
                     Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
                 } else {
+                    userTriggeredAction = true
                     if (vibrationEnabled) HapticUtils.vibrateTick(context)
                     viewModel.incrementCounter(taskId, delta)
                 }
@@ -342,8 +383,12 @@ fun TodayScreen(
                     recentDays.forEach { dateKey ->
                         val isDateToday = DateUtils.isToday(dateKey)
                         val isStreakMet = if (isDateToday) {
-                            totalCount in (1..completedCount)
-                        } else if (dateKey == selectedDateKey) {
+                            if (isViewingToday && (selectedCategory == null)) {
+                                totalCount in (1..completedCount)
+                            } else {
+                                isTodayCompletedLocally ?: fullyCompletedDatesSet.contains(dateKey)
+                            }
+                        } else if ((dateKey == selectedDateKey) && (selectedCategory == null)) {
                             (totalCount in (1..completedCount)) || fullyCompletedDatesSet.contains(dateKey)
                         } else {
                             fullyCompletedDatesSet.contains(dateKey)
@@ -356,7 +401,10 @@ fun TodayScreen(
                             isStreakMet = isStreakMet,
                             language = language,
                             accentColor = accentColor,
-                            onSelectDate = { viewModel.selectDate(it) },
+                            onSelectDate = {
+                                userTriggeredAction = false
+                                viewModel.selectDate(it)
+                            },
                             modifier = Modifier.weight(1f),
                         )
                     }

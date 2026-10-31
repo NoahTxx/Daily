@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -721,6 +722,36 @@ class ExampleRobolectricTest {
         assertEquals(1, restoredFreezes.size)
         assertEquals("VACATION", restoredFreezes[0].type)
         assertEquals("2026-10-30", restoredFreezes[0].startDate)
+    }
+
+    @Test
+    fun testTodayCompletionPreservedWhenQueryingPastDay(): Unit = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.DailyRepository(db.dailyTaskDao(), context)
+        val today = DateUtils.getTodayKey()
+        val yesterday = DateUtils.addDays(today, -1)
+
+        val twoDaysAgoMillis = System.currentTimeMillis() - 172800000L
+        val task1 = repo.insertTask(DailyTask(title = "Morning Run", category = "Sport", createdAt = twoDaysAgoMillis))
+        val task2 = repo.insertTask(DailyTask(title = "Read Book", category = "Focus", createdAt = twoDaysAgoMillis))
+
+        // Complete both tasks today
+        repo.toggleTaskCompletion(task1, today)
+        repo.toggleTaskCompletion(task2, today)
+
+        // Today must be in fullyCompletedDates
+        val fullyDone = repo.getFullyCompletedDatesSync()
+        assertTrue("Today must be marked as fully completed", fullyDone.contains(today))
+
+        // Querying yesterday's tasks (where 0 tasks are done)
+        val yesterdayTasks = repo.getTasksWithCompletionsSync(yesterday)
+        assertEquals(2, yesterdayTasks.size)
+        assertTrue("Yesterday tasks should not be completed", yesterdayTasks.none { it.isCompleted })
+
+        // Ensure today is STILL in fully completed dates!
+        val fullyDoneAfter = repo.getFullyCompletedDatesSync()
+        assertTrue("Today must remain in fully completed dates after inspecting yesterday", fullyDoneAfter.contains(today))
+        assertFalse("Yesterday must not be in fully completed dates", fullyDoneAfter.contains(yesterday))
     }
 }
 
