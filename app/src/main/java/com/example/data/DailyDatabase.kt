@@ -24,7 +24,7 @@ abstract class DailyDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: DailyDatabase? = null
 
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN isCounter INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN targetCount INTEGER NOT NULL DEFAULT 1")
@@ -32,7 +32,7 @@ abstract class DailyDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_2_3 = object : Migration(2, 3) {
+        val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN frequencyType TEXT NOT NULL DEFAULT 'DAILY'")
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN targetDaysPerWeek INTEGER NOT NULL DEFAULT 1")
@@ -40,14 +40,14 @@ abstract class DailyDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_3_4 = object : Migration(3, 4) {
+        val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN intervalDays INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN intervalAnchorDate TEXT NOT NULL DEFAULT ''")
             }
         }
 
-        private val MIGRATION_4_6 = object : Migration(4, 6) {
+        val MIGRATION_4_6 = object : Migration(4, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP INDEX IF EXISTS index_daily_tasks_isArchived_orderIndex")
                 db.execSQL("DROP INDEX IF EXISTS index_daily_tasks_reminderEnabled")
@@ -69,13 +69,13 @@ abstract class DailyDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_5_6 = object : Migration(5, 6) {
+        val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 MIGRATION_4_6.migrate(db)
             }
         }
 
-        private val MIGRATION_6_7 = object : Migration(6, 7) {
+        val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE daily_tasks ADD COLUMN durationMinutes INTEGER NOT NULL DEFAULT 0")
                 db.execSQL(

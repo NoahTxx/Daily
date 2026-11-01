@@ -111,7 +111,12 @@ fun SettingsScreen(
                 reminderHour,
                 reminderMinute,
             )
-            val msg = "${t("reminder_enabled_toast")} %02d:%02d".format(reminderHour, reminderMinute)
+            val isExact = ReminderManager.canScheduleExactAlarms(context)
+            val msg = if (!isExact) {
+                if (selectedLanguage == AppLanguage.EN) "General reminder set (Inexact alarms active)" else "Erinnerung aktiviert (Inexakter Alarm aktiv)"
+            } else {
+                "${t("reminder_enabled_toast")} %02d:%02d".format(reminderHour, reminderMinute)
+            }
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(context, t("perm_desc"), Toast.LENGTH_LONG).show()
@@ -195,7 +200,12 @@ fun SettingsScreen(
                                                 reminderHour,
                                                 reminderMinute,
                                             )
-                                            val msg = "${t("reminder_enabled_toast")} %02d:%02d".format(reminderHour, reminderMinute)
+                                            val isExact = ReminderManager.canScheduleExactAlarms(context)
+                                            val msg = if (!isExact) {
+                                                if (selectedLanguage == AppLanguage.EN) "General reminder set (Inexact alarms active)" else "Erinnerung aktiviert (Inexakter Alarm aktiv)"
+                                            } else {
+                                                "${t("reminder_enabled_toast")} %02d:%02d".format(reminderHour, reminderMinute)
+                                            }
                                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                         }
                                     } else {

@@ -37,6 +37,14 @@ object ReminderManager {
     private const val TEST_SNOOZE_REQUEST_CODE = 99951
     private const val TASK_SNOOZE_REQUEST_CODE_OFFSET = 500000
 
+    fun canScheduleExactAlarms(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            return alarmManager?.canScheduleExactAlarms() ?: true
+        }
+        return true
+    }
+
     private fun canPostNotifications(context: Context): Boolean {
         return (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) || (ContextCompat.checkSelfPermission(
             context,
