@@ -104,6 +104,8 @@ fun NothingCheckbox(
         )
     } else Modifier
 
+    val accentBgColor = remember(accentColor) { accentColor.copy(alpha = 0.15f) }
+
     Canvas(
         modifier = modifier
             .size(size)
@@ -113,11 +115,12 @@ fun NothingCheckbox(
         val radius = this.size.minDimension / 2f
         val strokeWidth = 1.5.dp.toPx()
         val c = this.center
+        val strokeStyle = Stroke(width = strokeWidth)
 
         if (checked) {
             // Fill background with light accent
             drawCircle(
-                color = accentColor.copy(alpha = 0.15f),
+                color = accentBgColor,
                 radius = radius,
                 center = c,
             )
@@ -126,7 +129,7 @@ fun NothingCheckbox(
                 color = accentColor,
                 radius = radius - (strokeWidth / 2f),
                 center = c,
-                style = Stroke(width = strokeWidth),
+                style = strokeStyle,
             )
             // Inner solid dot
             drawCircle(
@@ -140,7 +143,7 @@ fun NothingCheckbox(
                 color = outlineColor,
                 radius = radius - (strokeWidth / 2f),
                 center = c,
-                style = Stroke(width = strokeWidth),
+                style = strokeStyle,
             )
         }
     }
@@ -247,7 +250,7 @@ fun NothingHeader(
                     .clip(RoundedCornerShape(14.dp))
                     .border(1.2.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .defaultMinSize(minHeight = 38.dp)
+                    .defaultMinSize(minHeight = 38.dp, minWidth = 54.dp)
                     .padding(horizontal = 14.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -256,15 +259,15 @@ fun NothingHeader(
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontFamily = badgeFontFamily ?: headingFont,
                         fontSize = badgeFontSize,
-                        lineHeight = badgeFontSize * 1.15f,
+                        lineHeight = badgeFontSize,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
+                        letterSpacing = 0.sp,
                         platformStyle = PlatformTextStyle(
                             includeFontPadding = false,
                         ),
                         lineHeightStyle = LineHeightStyle(
                             alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both,
+                            trim = LineHeightStyle.Trim.None,
                         ),
                     ),
                     textAlign = TextAlign.Center,

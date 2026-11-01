@@ -273,12 +273,17 @@ fun TodayScreen(
         }
     }
 
-    val onToggleTask: (Long) -> Unit = remember(isViewingToday, vibrationEnabled, tasks) {
+    val currentTasksState = androidx.compose.runtime.rememberUpdatedState(tasks)
+    val currentIsViewingToday = androidx.compose.runtime.rememberUpdatedState(isViewingToday)
+    val currentVibrationEnabled = androidx.compose.runtime.rememberUpdatedState(vibrationEnabled)
+
+    val onToggleTask: (Long) -> Unit = remember(viewModel, context, language) {
         { taskId ->
-            if (!isViewingToday) {
-                Toast.makeText(context, t("past_day_readonly_toast"), Toast.LENGTH_SHORT).show()
+            if (!currentIsViewingToday.value) {
+                Toast.makeText(context, AppStrings.get("past_day_readonly_toast", language), Toast.LENGTH_SHORT).show()
             } else {
-                val taskItem = tasks.firstOrNull { (t) -> t.id == taskId }
+                val currentTasks = currentTasksState.value
+                val taskItem = currentTasks.firstOrNull { (t) -> t.id == taskId }
                 val isItemBlocked = (taskItem != null) && !taskItem.isCompleted && when (taskItem.task.frequencyType) {
                     "WEEKDAYS" -> !taskItem.isDueToday
                     "INTERVAL" -> !taskItem.isDueToday
@@ -287,27 +292,28 @@ fun TodayScreen(
                 }
                 if (isItemBlocked) {
                     val toastMsg = when (taskItem.task.frequencyType) {
-                        "WEEKDAYS" -> String.format(t("not_due_toast"), DateUtils.formatDaysOfWeekShort(taskItem.task.daysOfWeek, language))
+                        "WEEKDAYS" -> String.format(AppStrings.get("not_due_toast", language), DateUtils.formatDaysOfWeekShort(taskItem.task.daysOfWeek, language))
                         "INTERVAL" -> if (language == AppLanguage.EN) "Due in ${taskItem.daysUntilDue} days" else "In ${taskItem.daysUntilDue} Tagen fällig"
                         "WEEKLY" -> if (language == AppLanguage.EN) "Weekly goal reached (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})" else "Wochenziel erreicht (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})"
-                        else -> t("not_due_cant_check")
+                        else -> AppStrings.get("not_due_cant_check", language)
                     }
                     Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
                 } else {
                     userTriggeredAction = true
-                    if (vibrationEnabled) HapticUtils.vibrateTick(context)
+                    if (currentVibrationEnabled.value) HapticUtils.vibrateTick(context)
                     viewModel.toggleTask(taskId)
                 }
             }
         }
     }
 
-    val onIncrementTask: (Long, Int) -> Unit = remember(isViewingToday, vibrationEnabled, tasks) {
+    val onIncrementTask: (Long, Int) -> Unit = remember(viewModel, context, language) {
         { taskId, delta ->
-            if (!isViewingToday) {
-                Toast.makeText(context, t("past_day_readonly_toast"), Toast.LENGTH_SHORT).show()
+            if (!currentIsViewingToday.value) {
+                Toast.makeText(context, AppStrings.get("past_day_readonly_toast", language), Toast.LENGTH_SHORT).show()
             } else {
-                val taskItem = tasks.firstOrNull { (t) -> t.id == taskId }
+                val currentTasks = currentTasksState.value
+                val taskItem = currentTasks.firstOrNull { (t) -> t.id == taskId }
                 val isItemBlocked = (taskItem != null) && !taskItem.isCompleted && when (taskItem.task.frequencyType) {
                     "WEEKDAYS" -> !taskItem.isDueToday
                     "INTERVAL" -> !taskItem.isDueToday
@@ -316,22 +322,26 @@ fun TodayScreen(
                 }
                 if (isItemBlocked && (delta > 0)) {
                     val toastMsg = when (taskItem.task.frequencyType) {
-                        "WEEKDAYS" -> String.format(t("not_due_toast"), DateUtils.formatDaysOfWeekShort(taskItem.task.daysOfWeek, language))
+                        "WEEKDAYS" -> String.format(AppStrings.get("not_due_toast", language), DateUtils.formatDaysOfWeekShort(taskItem.task.daysOfWeek, language))
                         "INTERVAL" -> if (language == AppLanguage.EN) "Due in ${taskItem.daysUntilDue} days" else "In ${taskItem.daysUntilDue} Tagen fällig"
                         "WEEKLY" -> if (language == AppLanguage.EN) "Weekly goal reached (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})" else "Wochenziel erreicht (${taskItem.weeklyCompletedCount}/${taskItem.task.targetDaysPerWeek})"
-                        else -> t("not_due_cant_check")
+                        else -> AppStrings.get("not_due_cant_check", language)
                     }
                     Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
                 } else {
                     userTriggeredAction = true
-                    if (vibrationEnabled) HapticUtils.vibrateTick(context)
+                    if (currentVibrationEnabled.value) HapticUtils.vibrateTick(context)
                     viewModel.incrementCounter(taskId, delta)
                 }
             }
         }
     }
 
-    val onEditTask: (DailyTask) -> Unit = remember {
+    val onStartTimerTask: (DailyTask) -> Unit = remember {
+        { task -> activeTimerTask = task }
+    }
+
+    val onEditTask: (DailyTask) -> Unit = remember(onEditTaskClick) {
         { task -> onEditTaskClick(task) }
     }
 
@@ -730,7 +740,7 @@ fun TodayScreen(
                             onToggle = onToggleTask,
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
-                            onStartTimer = { task -> activeTimerTask = task },
+                            onStartTimer = onStartTimerTask,
                             isReadOnly = !isViewingToday,
                         )
                     }
@@ -805,7 +815,7 @@ fun TodayScreen(
                             onToggle = onToggleTask,
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
-                            onStartTimer = { task -> activeTimerTask = task },
+                            onStartTimer = onStartTimerTask,
                             isReadOnly = !isViewingToday,
                         )
                     }
@@ -831,7 +841,7 @@ fun TodayScreen(
                             onToggle = onToggleTask,
                             onIncrement = onIncrementTask,
                             onEdit = onEditTask,
-                            onStartTimer = { task -> activeTimerTask = task },
+                            onStartTimer = onStartTimerTask,
                             isReadOnly = !isViewingToday,
                         )
                     }
